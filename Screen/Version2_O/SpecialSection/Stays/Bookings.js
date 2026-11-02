@@ -1,6 +1,6 @@
 // "My bookings" view of the Stays listing (Stays.dc.html, `isBookings`).
 import React, {useEffect, useState} from 'react';
-import {Image, StyleSheet, Text, View} from 'react-native';
+import {Image, Linking, StyleSheet, Text, View} from 'react-native';
 import Animated, {
   interpolateColor,
   useAnimatedProps,
@@ -22,7 +22,25 @@ import {
   HeadsetIcon,
   STAR_D,
 } from './icons';
-import {bookingTabs, completed, countdown, upcoming} from './data';
+import {countdown} from './data';
+import {reviewBooking, useStayBookings} from '../api/stays';
+import {ErrorCard, Skeleton} from '../api/ui';
+
+const TABS = [
+  {id: 'up', api: 'upcoming', label: 'Upcoming'},
+  {id: 'past', api: 'completed', label: 'Completed'},
+  {id: 'cxl', api: 'cancelled', label: 'Cancelled'},
+];
+const EMPTY = {
+  up: ['No upcoming stays', 'Stays you book will show up here.'],
+  past: ['No completed stays yet', 'Stays you finish will show up here.'],
+  cxl: ['No cancelled bookings', 'Bookings you cancel will show up here.'],
+};
+
+const directions = b =>
+  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${b.name}, ${b.address}`)}`).catch(
+    () => {},
+  );
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const META = '#ADA597';
@@ -120,9 +138,8 @@ function IconBtn({label, children, onPress}) {
   );
 }
 
-function Upcoming({onOpenStay}) {
+function Upcoming({b}) {
   const [more, setMore] = useState(false);
-  const b = upcoming;
   return (
     <>
       <Animated.View entering={bin} style={styles.bcard}>
@@ -133,13 +150,13 @@ function Upcoming({onOpenStay}) {
             colors={['rgba(10,10,12,0.35)', 'rgba(10,10,12,0)', 'rgba(10,10,12,0.85)']}
             locations={[0, 0.35, 1]}
           />
-          <View style={[styles.bstat, styles.bstatOk]}>
-            <OkDot />
-            <Text style={[styles.bstatText, styles.okText]}>Confirmed</Text>
+          <View style={[styles.bstat, styles.bstatOk, !b.ok && styles.bstatWait]}>
+            {b.ok ? <OkDot /> : null}
+            <Text style={[styles.bstatText, b.ok ? styles.okText : styles.doneText]}>{b.statusLabel}</Text>
           </View>
           <View style={styles.bcount}>
             <ClockIcon />
-            <Text style={styles.bcountText}>{countdown(b.checkIn)}</Text>
+            <Text style={styles.bcountText}>{countdown(new Date(b.checkIn))}</Text>
           </View>
           <View style={styles.bimgText}>
             <Text style={styles.bname}>{b.name}</Text>
@@ -168,13 +185,13 @@ function Upcoming({onOpenStay}) {
         </View>
         <View style={styles.bmeta}>
           {b.meta.map((m, i) => (
-            <React.Fragment key={m}>
+            <React.Fragment key={i}>
               {i ? <Text style={styles.bmetaText}>·</Text> : null}
               <Text style={styles.bmetaText}>{m}</Text>
             </React.Fragment>
           ))}
         </View>
-        <More open={more}>
+        <More open={more && b.details.length > 0}>
           {b.details.map(([k, v, c]) => (
             <View key={k} style={styles.kv}>
               <Text style={styles.kvKey}>{k}</Text>
@@ -192,7 +209,7 @@ function Upcoming({onOpenStay}) {
             <Text style={styles.bbtnText}>{more ? 'Hide details' : 'View details'}</Text>
             <Chevron up={more} />
           </PressScale>
-          <IconBtn label="Directions to Dreamscape">
+          <IconBtn label={`Directions to ${b.name}`} onPress={() => directions(b)}>
             <DirectionsIcon />
           </IconBtn>
           <IconBtn label="Chat with concierge">
@@ -200,7 +217,6 @@ function Upcoming({onOpenStay}) {
           </IconBtn>
         </View>
       </Animated.View>
-      <Text style={styles.note}>Showing bookings made with this account</Text>
     </>
   );
 }
@@ -234,9 +250,14 @@ function RateStar({n, on, onPress}) {
   );
 }
 
-function Completed({onOpenStay}) {
+function Completed({c, onOpenStay}) {
   const [rating, setRating] = useState(0);
-  const c = completed;
+  const rate = n => {
+    setRating(n);
+    if (c.id) {
+      reviewBooking(c.id, n).catch(() => setRating(0));
+    }
+  };
   return (
     <Animated.View entering={bin} style={styles.bcard}>
       <View style={styles.pastRow}>
@@ -244,20 +265,22 @@ function Completed({onOpenStay}) {
         <View style={styles.pastText}>
           <View style={[styles.bstat, styles.bstatDone]}>
             <View style={[styles.statDot, styles.doneDot]} />
-            <Text style={[styles.bstatText, styles.doneText]}>Completed</Text>
+            <Text style={[styles.bstatText, styles.doneText]}>{c.statusLabel}</Text>
           </View>
           <Text style={styles.pastName}>{c.name}</Text>
-          <Text style={styles.pastSub}>{c.sub}</Text>
+          <Text style={styles.pastSub}>{c.pastSub}</Text>
         </View>
       </View>
-      <View style={styles.rateRow}>
-        <Text style={styles.rateLabel}>{rating ? 'Thanks for rating!' : 'Rate your stay'}</Text>
-        <View style={styles.stars} accessibilityRole="radiogroup" accessibilityLabel="Rate your stay">
-          {[1, 2, 3, 4, 5].map(n => (
-            <RateStar key={n} n={n} on={n <= rating} onPress={() => setRating(n)} />
-          ))}
+      {c.canReview || rating ? (
+        <View style={styles.rateRow}>
+          <Text style={styles.rateLabel}>{rating ? 'Thanks for rating!' : 'Rate your stay'}</Text>
+          <View style={styles.stars} accessibilityRole="radiogroup" accessibilityLabel="Rate your stay">
+            {[1, 2, 3, 4, 5].map(n => (
+              <RateStar key={n} n={n} on={n <= rating} onPress={() => (rating ? null : rate(n))} />
+            ))}
+          </View>
         </View>
-      </View>
+      ) : null}
       <View style={styles.bact}>
         <PressScale to={0.95} duration={400} onPress={() => onOpenStay(c.stayId)} style={[styles.bbtn, styles.grow]}>
           <Text style={styles.bbtnText}>Book again</Text>
@@ -277,7 +300,7 @@ const float3 = p => {
 };
 
 /** `.empty` for cancelled bookings; the red cross draws itself (`exd`). */
-function Empty({onExplore}) {
+function Empty({title, sub, onExplore}) {
   const p = useShot(true, 700, 300);
   const ex = useAnimatedProps(() => ({strokeDashoffset: 60 * (1 - E.ease(p.value))}));
   return (
@@ -296,8 +319,8 @@ function Empty({onExplore}) {
           />
         </Svg>
       </Loop>
-      <Text style={styles.emptyTitle}>No cancelled bookings</Text>
-      <Text style={styles.emptySub}>Bookings you cancel will show up here.</Text>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptySub}>{sub}</Text>
       <PressScale to={0.95} duration={400} onPress={onExplore} style={[styles.bbtn, styles.emptyBtn]}>
         <Text style={styles.bbtnText}>Explore stays</Text>
       </PressScale>
@@ -305,19 +328,43 @@ function Empty({onExplore}) {
   );
 }
 
-export default function Bookings({onExplore, onOpenStay}) {
+export default function Bookings({counts: homeCounts, onExplore, onOpenStay}) {
   const [bk, setBk] = useState('up');
+  const tab = TABS.find(t => t.id === bk);
+  const q = useStayBookings(tab.api);
   useFirstFrame('Bookings');
+  const counts = q.data?.counts || homeCounts || {};
+  const list = q.data?.bookings;
+  let body;
+  if (q.error && !list) {
+    body = <ErrorCard message={q.error.message} onRetry={q.refresh} style={styles.flush} />;
+  } else if (!list) {
+    body = <Skeleton style={bk === 'up' ? styles.skUp : styles.skPast} />;
+  } else if (!list.length) {
+    body = <Empty key={bk} title={EMPTY[bk][0]} sub={EMPTY[bk][1]} onExplore={onExplore} />;
+  } else {
+    body = list.map((b, i) =>
+      bk === 'up' ? (
+        <Upcoming key={b.id || i} b={b} />
+      ) : (
+        <Completed key={b.id || i} c={b} onOpenStay={onOpenStay} />
+      ),
+    );
+  }
   return (
     <View style={styles.bkv}>
       <View style={styles.subt} accessibilityRole="tablist" accessibilityLabel="Booking status">
-        {bookingTabs.map(t => (
-          <SubTab key={t.id} tab={t} on={bk === t.id} onPress={() => setBk(t.id)} />
+        {TABS.map(t => (
+          <SubTab
+            key={t.id}
+            tab={{...t, count: counts[t.api] ? String(counts[t.api]) : ''}}
+            on={bk === t.id}
+            onPress={() => setBk(t.id)}
+          />
         ))}
       </View>
-      {bk === 'up' ? <Upcoming key="up" onOpenStay={onOpenStay} /> : null}
-      {bk === 'past' ? <Completed key="past" onOpenStay={onOpenStay} /> : null}
-      {bk === 'cxl' ? <Empty key="cxl" onExplore={onExplore} /> : null}
+      {body}
+      {list?.length ? <Text style={styles.note}>Showing bookings made with this account</Text> : null}
     </View>
   );
 }
@@ -353,6 +400,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   bstatOk: {position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(10,10,12,0.6)', borderColor: 'rgba(110,231,160,0.4)'},
+  bstatWait: {borderColor: colors.goldA(0.4)},
+  flush: {marginHorizontal: 0},
+  skUp: {height: 380},
+  skPast: {height: 200},
   bstatDone: {alignSelf: 'flex-start', backgroundColor: colors.goldA(0.1), borderColor: colors.goldA(0.3)},
   bstatText: {fontFamily: fonts.extrabold, fontSize: 11},
   statDot: {width: 6, height: 6, borderRadius: 3},

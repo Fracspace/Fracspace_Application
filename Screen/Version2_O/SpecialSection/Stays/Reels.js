@@ -10,12 +10,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import LinearGradient from 'react-native-linear-gradient';
+import Video from 'react-native-video';
 import {useIsFocused} from '@react-navigation/native';
 import {colors, fonts, ls} from '../theme';
-import {E, PressScale, enterUp, useLinger, useReducedMotion, useToggle} from '../anim';
+import {E, PressScale, enterUp, useGateOn, useLinger, useReducedMotion, useToggle} from '../anim';
 import {Ripple} from './bits';
 import {MuteIcon, PlayPauseIcon} from './icons';
-import {reels} from './data';
 import {useRenderCount} from '../perf';
 
 const CARD_W = 300;
@@ -27,9 +27,11 @@ const POS = [
   {x: 54, s: 0.86, r: 6, dim: 0.7},
 ];
 const ZOOM_MS = 9000;
+// A video that isn't ready by then plays as its thumbnail (with the zoom).
+const VIDEO_WAIT_MS = 5000;
 
 /** One card of the deck; transitions between stack positions with the spring. */
-const DeckCard = memo(function DeckCard({img, pos, hold}) {
+const DeckCard = memo(function DeckCard({img, pos, hold, video, play, muted, onReady, onFail}) {
   useRenderCount('DeckCard');
   const reduced = useReducedMotion();
   const tx = useSharedValue(POS[pos].x);
@@ -69,6 +71,9 @@ const DeckCard = memo(function DeckCard({img, pos, hold}) {
     <Animated.View style={[styles.rc, {zIndex: 3 - pos}, card]}>
       <View style={styles.rcClip}>
         <Animated.Image source={img} style={[styles.fill, pic]} resizeMode="cover" />
+        {pos === 0 && video ? (
+          <ReelVideo uri={video} play={play} muted={muted} onReady={onReady} onFail={onFail} />
+        ) : null}
         <LinearGradient
           style={StyleSheet.absoluteFill}
           colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.85)']}
@@ -79,6 +84,28 @@ const DeckCard = memo(function DeckCard({img, pos, hold}) {
     </Animated.View>
   );
 });
+
+/** The front card's video; stays invisible (thumbnail shows) until it can play. */
+function ReelVideo({uri, play, muted, onReady, onFail}) {
+  const [shown, setShown] = useState(false);
+  return (
+    <Video
+      source={{uri}}
+      style={[StyleSheet.absoluteFill, !shown && styles.hidden]}
+      resizeMode="cover"
+      paused={!play}
+      muted={muted}
+      repeat
+      disableFocus
+      playInBackground={false}
+      onReadyForDisplay={() => {
+        setShown(true);
+        onReady();
+      }}
+      onError={onFail}
+    />
+  );
+}
 
 const lin = duration => ({duration, easing: E.linear});
 
@@ -128,9 +155,12 @@ function BigPlay({playing, onPress}) {
 }
 
 /** The deck. Reports the current position ("1 / 3") via onPos. */
-export default function Reels({onBook, onPos}) {
+export default function Reels({reels, onBook, onPos}) {
   const focused = useIsFocused();
+  const gateOn = useGateOn();
   const [reel, setReel] = useState(0);
+  // The front video: 'wait' (thumbnail + zoom), 'ready' (playing) or 'thumb' (slow / failed).
+  const [vid, setVid] = useState('wait');
   const [sec, setSec] = useState(0); // whole seconds played, for the time label
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(true);
@@ -140,6 +170,7 @@ export default function Reels({onBook, onPos}) {
 
   const goReel = useCallback(i => {
     setReel(i);
+    setVid('wait');
     setSec(0);
     setFlipN(f => f + 1);
   }, []);
@@ -149,10 +180,21 @@ export default function Reels({onBook, onPos}) {
   // label and at the end of the reel to advance (the design ticks every 100ms).
   const prog = useSharedValue(0);
   const played = useRef({reel: 0, ms: 0});
-  const run = playing && focused;
+  const cur = reels[reel] || reels[0];
+  const waiting = !!cur.video && vid === 'wait';
+  const run = playing && focused && !waiting;
+  useEffect(() => {
+    if (!waiting) {
+      return;
+    }
+    const id = setTimeout(() => setVid(v => (v === 'wait' ? 'thumb' : v)), VIDEO_WAIT_MS);
+    return () => clearTimeout(id);
+  }, [waiting, reel]);
+  const onReady = useCallback(() => setVid(v => (v === 'wait' ? 'ready' : v)), []);
+  const onFail = useCallback(() => setVid('thumb'), []);
   useEffect(() => {
     const p = played.current;
-    const total = reels[reel].secs * 1000;
+    const total = cur.secs * 1000;
     if (p.reel !== reel) {
       prog.value = p.reel > reel ? 1 : 0; // this bar was full if we went back
       p.reel = reel;
@@ -181,12 +223,11 @@ export default function Reels({onBook, onPos}) {
       clearTimeout(id);
       p.ms = Math.min(total, Date.now() - start);
     };
-  }, [reel, run, n, prog, goReel]);
+  }, [reel, run, n, prog, goReel, cur.secs]);
   useEffect(() => {
     onPos?.(`${reel + 1} / ${n}`);
   }, [reel, n, onPos]);
 
-  const cur = reels[reel];
   const time = `0:${String(sec).padStart(2, '0')} / ${cur.dur}`;
   const cap = i => enterUp(i, {step: 80, duration: 700, dy: 16});
 
@@ -194,7 +235,17 @@ export default function Reels({onBook, onPos}) {
     <View style={styles.wrap}>
       <View style={styles.deck}>
         {reels.map((v, i) => (
-          <DeckCard key={v.id} img={v.img} pos={(i - reel + n) % n} hold={!playing} />
+          <DeckCard
+            key={v.id}
+            img={v.img}
+            pos={(i - reel + n) % n}
+            hold={!playing}
+            video={i === reel && vid !== 'thumb' ? v.video : null}
+            play={playing && focused && gateOn}
+            muted={muted}
+            onReady={onReady}
+            onFail={onFail}
+          />
         ))}
         <View style={styles.ui}>
           <View style={styles.segs}>
@@ -254,6 +305,7 @@ const styles = StyleSheet.create({
   wrap: {paddingHorizontal: 20},
   deck: {height: 440},
   fill: {width: '100%', height: '100%'},
+  hidden: {opacity: 0},
   rc: {
     position: 'absolute',
     left: 0,

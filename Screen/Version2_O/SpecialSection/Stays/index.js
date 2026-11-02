@@ -18,6 +18,8 @@ import {SearchIcon, TicketIcon} from './icons';
 import Explore, {SearchBar} from './Explore';
 import Bookings from './Bookings';
 import SearchSheet, {initialSearch} from './SearchSheet';
+import {useStaysHome} from '../api/stays';
+import {ErrorCard} from '../api/ui';
 
 /** `.stg` header children: `rise .8s --out`, delays .05s / .15s. */
 const rise = i => enterUp(i, {step: 100, delay: 50, duration: 800, dy: 14});
@@ -49,7 +51,7 @@ function TabLabel({on, Icon, label, badge, onPress}) {
 }
 
 /** `.mtab`: gold pill slides between the two tabs (.55s spring). */
-function ViewTabs({view, setView}) {
+function ViewTabs({view, setView, upcoming}) {
   const [w, setW] = useState(0);
   const v = useToggle(view === 'bookings', {duration: 550, easing: E.spring});
   const pillW = Math.max(0, (w - 2 - 8) / 2); // calc((100% - 8px) / 2) inside the 1px border
@@ -67,7 +69,7 @@ function ViewTabs({view, setView}) {
         <TabLabel
           on={view === 'bookings'}
           label="My bookings"
-          badge="1"
+          badge={upcoming ? String(upcoming) : null}
           Icon={TicketIcon}
           onPress={() => setView('bookings')}
         />
@@ -81,6 +83,8 @@ export default function Stays({navigation}) {
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const [view, setView] = useState('explore');
+  const home = useStaysHome();
+  const paused = home.data && !home.data.enabled;
   const [searchTop, setSearchTop] = useState(0);
   // Applied search choices (the capsules read them). The sheet edits its own
   // copy and hands it back on close, so its taps re-render only the sheet.
@@ -134,10 +138,19 @@ export default function Stays({navigation}) {
                 </Animated.View>
               </View>
 
-              <ViewTabs view={view} setView={setView} />
+              <ViewTabs view={view} setView={setView} upcoming={home.data?.counts?.upcoming} />
 
-              {view === 'explore' ? (
+              {paused ? (
+                <ErrorCard
+                  title="Stays are taking a short break"
+                  message={home.data.disabledMessage || 'Please check back soon.'}
+                  style={styles.paused}
+                />
+              ) : view === 'explore' ? (
                 <Explore
+                  data={home.data}
+                  error={home.error}
+                  onRetry={home.refresh}
                   onSearchTop={setSearchTop}
                   onOpenStay={openStay}
                   search={search}
@@ -145,12 +158,12 @@ export default function Stays({navigation}) {
                   openSearch={setSheetStep}
                 />
               ) : (
-                <Bookings onExplore={() => setView('explore')} onOpenStay={openStay} />
+                <Bookings counts={home.data?.counts} onExplore={() => setView('explore')} onOpenStay={openStay} />
               )}
             </View>
           </Animated.ScrollView>
         </RevealScope>
-        {view === 'explore' && searchTop > 0 ? (
+        {view === 'explore' && !paused && searchTop > 0 ? (
           <SearchBar
             scrollY={scrollY}
             top={searchTop}
@@ -169,6 +182,7 @@ export default function Stays({navigation}) {
 const styles = StyleSheet.create({
   page: {flex: 1, backgroundColor: colors.ground},
   searchFloat: {position: 'absolute', top: 0, left: 0, right: 0},
+  paused: {marginTop: 24},
   head: {
     flexDirection: 'row',
     alignItems: 'center',

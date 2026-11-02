@@ -1,7 +1,8 @@
 // "Explore stays" view of the Stays listing (Stays.dc.html, `isExplore`).
 // Returned as siblings; the search bar floats over the page (index.js) above a fixed slot here.
-import React, {memo, useEffect, useState} from 'react';
-import {Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
+import React, {memo, useEffect, useMemo, useState} from 'react';
+import {Image, Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, {
   interpolate,
   interpolateColor,
@@ -16,7 +17,9 @@ import {colors, fonts, ls} from '../theme';
 import {E, PressScale, RailGate, Reveal, ViewportGate, cssAngle, kf, useLoop, useToggle} from '../anim';
 import {Burst, Ripple, Tag, useShot} from './bits';
 import {CalendarIcon, CameraIcon, HEART_D, HeadsetIcon, PinIcon, SearchIcon, SlidersIcon, StarIcon} from './icons';
-import {chipCities, offers, retreats, reviews, searchHints} from './data';
+import {searchHints} from './data';
+import {likeProperty} from '../api/stays';
+import {ErrorCard, Skeleton} from '../api/ui';
 import {guestLabel, whenLabel} from './SearchSheet';
 import Reels from './Reels';
 import Offers, {COUPON_W} from './Offers';
@@ -122,7 +125,7 @@ function Chip({label, on, pin, aria, onPress}) {
  * Capsules under the search bar: the calendar button, then (after a search)
  * the chosen destination, dates and guests, then the other destinations.
  */
-function Chips({search, patch, openSearch}) {
+function Chips({cities, search, patch, openSearch}) {
   const ac = search.pillCity;
   const city = c => (
     <Chip
@@ -150,10 +153,10 @@ function Chips({search, patch, openSearch}) {
           {ac ? city(ac) : null}
           <Chip key="dates" label={when} on aria={`Dates ${when}, change`} onPress={() => openSearch('when')} />
           <Chip key="guests" label={who} on aria={`${who}, change`} onPress={() => openSearch('who')} />
-          {chipCities.filter(c => c !== ac).map(city)}
+          {cities.filter(c => c !== ac).map(city)}
         </>
       ) : (
-        chipCities.map(city)
+        cities.map(city)
       )}
     </ScrollView>
   );
@@ -226,8 +229,8 @@ function RetreatCard({r, i, sx, vw, liked, onLike, onOpen}) {
   );
 }
 
-function Retreats({city, onClear, liked, onLike, onOpen}) {
-  const list = city ? retreats.filter(r => r.loc.includes(city)) : retreats;
+function Retreats({retreats, total, city, onClear, liked, onLike, onOpen}) {
+  const list = !retreats ? [] : city ? retreats.filter(r => r.loc.includes(city)) : retreats;
   const {width: vw} = useWindowDimensions();
   const sx = useSharedValue(0);
   const max = useSharedValue(1);
@@ -245,13 +248,17 @@ function Retreats({city, onClear, liked, onLike, onOpen}) {
         <Text style={styles.h2}>Curated Retreats</Text>
         <Text style={styles.sub}>Handpicked boutique stays · Swipe to explore</Text>
       </Reveal>
-      {list.length === 0 ? (
+      {retreats && list.length === 0 ? (
         <View style={styles.none}>
-          <Text style={styles.noneTitle}>Stays in {city} are coming soon</Text>
-          <Text style={styles.noneSub}>Explore our other destinations meanwhile.</Text>
-          <Pressable onPress={onClear} style={styles.noneBtn}>
-            <Text style={styles.noneBtnText}>Show all stays →</Text>
-          </Pressable>
+          <Text style={styles.noneTitle}>{city ? `Stays in ${city} are coming soon` : 'New stays are coming soon'}</Text>
+          <Text style={styles.noneSub}>
+            {city ? 'Explore our other destinations meanwhile.' : 'We are adding new retreats. Check back shortly.'}
+          </Text>
+          {city ? (
+            <Pressable onPress={onClear} style={styles.noneBtn}>
+              <Text style={styles.noneBtnText}>Show all stays →</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
       <Animated.ScrollView
@@ -263,6 +270,7 @@ function Retreats({city, onClear, liked, onLike, onOpen}) {
         snapToInterval={RCARD_W + RCARD_GAP}
         decelerationRate="fast"
         contentContainerStyle={[styles.rail, {gap: RCARD_GAP}]}>
+        {!retreats ? [0, 1].map(i => <Skeleton key={i} style={styles.rcardSk} />) : null}
         {list.map((r, i) => (
           <RetreatCard
             key={r.id}
@@ -280,7 +288,7 @@ function Retreats({city, onClear, liked, onLike, onOpen}) {
         <View style={styles.track}>
           <Animated.View style={[styles.thumb, thumb]} />
         </View>
-        <Text style={styles.trackText}>Showing 7 of 7 destinations</Text>
+        <Text style={styles.trackText}>{retreats ? `Showing ${list.length} of ${Math.max(total, list.length)} destinations` : ' '}</Text>
       </View>
     </View>
   );
@@ -322,10 +330,12 @@ function Review({g}) {
       </View>
       <View style={styles.qpanel}>
         <Text style={styles.quote}>“{g.quote}”</Text>
-        <View style={styles.photos}>
-          <CameraIcon />
-          <Text style={styles.photosText}>{g.photos}</Text>
-        </View>
+        {g.photos ? (
+          <View style={styles.photos}>
+            <CameraIcon />
+            <Text style={styles.photosText}>{g.photos}</Text>
+          </View>
+        ) : null}
       </View>
       <View style={styles.reviewFoot}>
         <View style={styles.who}>
@@ -358,7 +368,17 @@ function ReviewShade() {
   );
 }
 
-function Concierge() {
+/** WhatsApp chat with the concierge, else a phone call. */
+function contact(c) {
+  const wa = (c.whatsapp || '').replace(/\D/g, '');
+  if (wa) {
+    Linking.openURL(`https://wa.me/${wa}`).catch(() => {});
+  } else if (c.phone) {
+    Linking.openURL(`tel:${c.phone.replace(/[^\d+]/g, '')}`).catch(() => {});
+  }
+}
+
+function Concierge({c}) {
   return (
     <Reveal style={styles.concWrap}>
       <LinearGradient colors={[colors.cardTop, colors.cardBottom]} {...CONC_DIR} style={styles.conc}>
@@ -368,10 +388,10 @@ function Concierge() {
           <Ripple duration={2600} delay={1300} color={colors.goldA(0.45)} />
         </View>
         <View style={styles.concText}>
-          <Text style={styles.concTitle}>24/7 Bespoke Concierge</Text>
-          <Text style={styles.concSub}>Private airport pickups & custom bookings</Text>
+          <Text style={styles.concTitle}>{c.title}</Text>
+          {c.subtitle ? <Text style={styles.concSub}>{c.subtitle}</Text> : null}
         </View>
-        <PressScale to={0.92} duration={400} accessibilityLabel="Chat with concierge" style={styles.chat}>
+        <PressScale to={0.92} duration={400} onPress={() => contact(c)} accessibilityLabel="Chat with concierge" style={styles.chat}>
           <View style={styles.online}>
             <Ripple duration={1600} color="#4ADE80" width={1.5} inset={4} />
           </View>
@@ -386,8 +406,8 @@ function Concierge() {
  * "See it before you stay". Holds the reel counter itself so a reel change
  * re-renders only this section, not the whole listing.
  */
-const ReelsSection = memo(function ReelsSection({onOpenStay}) {
-  const [reelPos, setReelPos] = useState('1 / 3');
+const ReelsSection = memo(function ReelsSection({reels, onOpenStay}) {
+  const [reelPos, setReelPos] = useState(`1 / ${reels.length}`);
   return (
     <ViewportGate style={styles.section}>
       <Reveal style={[styles.secHead, styles.secHeadRow, styles.mb16]}>
@@ -398,7 +418,7 @@ const ReelsSection = memo(function ReelsSection({onOpenStay}) {
         <Tag>{reelPos}</Tag>
       </Reveal>
       <Reveal>
-        <Reels onPos={setReelPos} onBook={reel => onOpenStay(reel.stayId)} />
+        <Reels reels={reels} onPos={setReelPos} onBook={reel => onOpenStay(reel.stayId)} />
       </Reveal>
     </ViewportGate>
   );
@@ -421,7 +441,7 @@ function useStage() {
   return stage;
 }
 
-export default memo(function Explore({onSearchTop, onOpenStay, search, patch, openSearch}) {
+export default memo(function Explore({data, error, onRetry, onSearchTop, onOpenStay, search, patch, openSearch}) {
   const stage = useStage();
   const {width: vw} = useWindowDimensions();
   // Scroll x of the Offers / Reviews rails, so each card loops only while in view.
@@ -435,7 +455,27 @@ export default memo(function Explore({onSearchTop, onOpenStay, search, patch, op
   });
   const [liked, setLiked] = useState({});
   const [claimed, setClaimed] = useState({});
-  const flip = set => id => set(s => ({...s, [id]: !s[id]}));
+  const d = data;
+  // Server's liked state until the guest taps; a failed like flips back.
+  const likedMap = useMemo(() => {
+    const m = {};
+    (d?.retreats || []).forEach(r => (m[r.id] = r.liked));
+    return {...m, ...liked};
+  }, [d, liked]);
+  const onLike = id => {
+    const next = !likedMap[id];
+    setLiked(s => ({...s, [id]: next}));
+    const r = d?.retreats?.find(x => x.id === id);
+    likeProperty(r?.propertyId || id, next).catch(() => setLiked(s => ({...s, [id]: !next})));
+  };
+  // Claim keeps the code for Review Booking's coupon field.
+  const onClaim = id => {
+    setClaimed(s => ({...s, [id]: true}));
+    const o = d?.offers?.find(x => x.id === id);
+    if (o?.code) {
+      AsyncStorage.setItem('ss:coupon', o.code).catch(() => {});
+    }
+  };
   useRenderCount('Explore');
   useFirstFrame('Explore');
 
@@ -443,22 +483,28 @@ export default memo(function Explore({onSearchTop, onOpenStay, search, patch, op
     <>
       <View style={styles.searchSlot} onLayout={e => onSearchTop(e.nativeEvent.layout.y)} />
 
-      <Chips search={search} patch={patch} openSearch={openSearch} />
+      <Chips cities={d?.cities || []} search={search} patch={patch} openSearch={openSearch} />
 
-      <Retreats
-        city={search.pillCity}
-        onClear={() => patch({pillCity: ''})}
-        liked={liked} onLike={flip(setLiked)} onOpen={onOpenStay} />
+      {error && !d ? (
+        <ErrorCard message={error.message} onRetry={onRetry} style={styles.errTop} />
+      ) : (
+        <Retreats
+          retreats={d?.retreats}
+          total={d?.total || 0}
+          city={search.pillCity}
+          onClear={() => patch({pillCity: ''})}
+          liked={likedMap} onLike={onLike} onOpen={onOpenStay} />
+      )}
 
-      {stage > 0 ? <ReelsSection onOpenStay={onOpenStay} /> : null}
+      {stage > 0 && d?.reels.length ? <ReelsSection reels={d.reels} onOpenStay={onOpenStay} /> : null}
 
-      {stage > 1 ? (
+      {stage > 1 && d?.offers.length ? (
         <ViewportGate style={styles.section}>
           <Reveal style={[styles.secHead, styles.secHeadRow]}>
             <View style={styles.headCol}>
               <View style={styles.titleRow}>
                 <Text style={styles.h2}>Exclusive Offers & Perks</Text>
-                <Tag>3 ACTIVE</Tag>
+                <Tag>{`${d.offers.length} ACTIVE`}</Tag>
               </View>
               <Text style={styles.sub}>Curated member rates & bespoke privileges</Text>
             </View>
@@ -472,9 +518,9 @@ export default memo(function Explore({onSearchTop, onOpenStay, search, patch, op
             decelerationRate="fast"
             contentContainerStyle={[styles.rail, styles.gap12]}>
             <Offers
-              offers={offers}
+              offers={d.offers}
               claimed={claimed}
-              onClaim={id => setClaimed(s => ({...s, [id]: true}))}
+              onClaim={onClaim}
               sx={offerX}
               viewportW={vw}
             />
@@ -482,7 +528,7 @@ export default memo(function Explore({onSearchTop, onOpenStay, search, patch, op
         </ViewportGate>
       ) : null}
 
-      {stage > 2 ? (
+      {stage > 2 && d?.reviews.length ? (
         <ViewportGate style={styles.section}>
           <Reveal style={styles.secHead}>
             <Text style={styles.h2}>Guest Experiences</Text>
@@ -496,7 +542,7 @@ export default memo(function Explore({onSearchTop, onOpenStay, search, patch, op
             snapToInterval={REVIEW_W + 12}
             decelerationRate="fast"
             contentContainerStyle={[styles.rail, styles.gap12]}>
-            {reviews.map((g, i) => (
+            {d.reviews.map((g, i) => (
               <RailGate key={g.id} sx={reviewX} left={20 + i * (REVIEW_W + 12)} width={REVIEW_W} viewportW={vw}>
                 <Review g={g} />
               </RailGate>
@@ -505,9 +551,9 @@ export default memo(function Explore({onSearchTop, onOpenStay, search, patch, op
         </ViewportGate>
       ) : null}
 
-      {stage > 3 ? (
+      {stage > 3 && d?.concierge?.title ? (
         <ViewportGate>
-          <Concierge />
+          <Concierge c={d.concierge} />
         </ViewportGate>
       ) : null}
     </>
@@ -590,6 +636,8 @@ const styles = StyleSheet.create({
   mb16: {marginBottom: 16},
   // retreats
   rcard: {width: RCARD_W},
+  rcardSk: {width: RCARD_W, height: 300},
+  errTop: {marginTop: 18},
   rcardPress: {gap: 6},
   rimg: {height: 212, borderRadius: 24, overflow: 'hidden', backgroundColor: colors.card},
   pill: {

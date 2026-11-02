@@ -26,6 +26,7 @@ import Animated, {
   Easing,
   cancelAnimation,
   makeMutable,
+  runOnJS,
   useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
@@ -96,6 +97,24 @@ export function LoopGate({active, children}) {
     },
   );
   return <LoopActive.Provider value={own}>{children}</LoopActive.Provider>;
+}
+
+/**
+ * The nearest gate's state as a JS boolean, for things that are not loops
+ * (a video player) but should also stop off screen or behind a sheet.
+ */
+export function useGateOn() {
+  const gate = useContext(LoopActive);
+  const [on, setOn] = useState(gate.value);
+  useAnimatedReaction(
+    () => gate.value,
+    (v, was) => {
+      if (v !== was) {
+        runOnJS(setOn)(v);
+      }
+    },
+  );
+  return on;
 }
 
 /**
