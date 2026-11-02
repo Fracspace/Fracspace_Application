@@ -3,7 +3,8 @@
 // tab. Payment is mocked (Proceed → 1.2s processing → confirm animation →
 // success) until stays have a booking API; see `mockReceipt`.
 import React, {memo, useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {BackHandler, Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, {Easing, useAnimatedStyle, useSharedValue, withTiming} from 'react-native-reanimated';
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, {Path} from 'react-native-svg';
@@ -18,6 +19,8 @@ import Calendar from './Calendar';
 import Confirming, {CONFIRM_MS} from './Confirming';
 import Success from './Success';
 import {useFirstFrame, useJsFps, useRenderCount} from '../perf';
+import {money, toReceipt} from '../api/stays';
+import {clock, useHold} from './useHold';
 import {
   CHECK_IN,
   CHECK_OUT,
@@ -120,9 +123,9 @@ const Total = memo(function Total({label}) {
       <Text style={styles.numT}>₹</Text>
       {chars.map((ch, i) => {
         const key = chars.length - i;
-        return ch === ',' ? (
+        return ch === ',' || ch === '.' ? (
           <Text key={`c${key}`} style={styles.numT}>
-            ,
+            {ch}
           </Text>
         ) : (
           <Odo key={`d${key}`} index={Number(ch)} h={28} items={DIGITS} duration={500} textStyle={styles.numT} />
@@ -150,10 +153,18 @@ export default function StayReview({navigation, route}) {
   const today = useMemo(todayDate, []);
   const first = useMemo(defaultDates, []);
 
-  const [cin, setCin] = useState(first.cin);
-  const [cout, setCout] = useState(first.cout);
-  const [adults, setAdults] = useState(review.adults);
-  const [kids, setKids] = useState(0);
+  // Live: the hold from Stay Detail's Reserve; the server prices every change.
+  const hold = useHold(params?.booking || null);
+  const hs = hold.state;
+  const live = hold.live && !!hs;
+  const maxAdults = review.maxAdults || MAX_ADULTS;
+  const maxKids = review.maxKids ?? MAX_KIDS;
+  const [cin, setCin] = useState(hs ? hs.cin : first.cin);
+  const [cout, setCout] = useState(hs ? hs.cout : first.cout);
+  const [adults, setAdults] = useState(hs ? hs.adults : review.adults);
+  const [kids, setKids] = useState(hs ? hs.children : 0);
+  const [notice, setNotice] = useState(null);
+  const [code, setCode] = useState(hs?.offerCode || '');
   const [flip, setFlip] = useState(0);
   const [cal, setCal] = useState(false);
   const [view, setView] = useState(new Date(first.cin.getFullYear(), first.cin.getMonth(), 1));
@@ -199,14 +210,93 @@ export default function StayReview({navigation, route}) {
     }
   }, [reduced, t]);
 
-  const nights = Math.max(1, nightsBetween(cin, cout));
+  // A date / guest change is sent to the server after a short pause; if it is
+  // refused (sold out, too many guests) the trip goes back to what is held.
+  const {patch} = hold;
+  useEffect(() => {
+    if (!live) {
+      return;
+    }
+    const same =
+      cin.getTime() === hs.cin.getTime() && cout.getTime() === hs.cout.getTime() && adults === hs.adults && kids === hs.children;
+    if (same) {
+      return;
+    }
+    const id = setTimeout(() => {
+      patch({cin, cout, adults, children: kids})
+        .then(next => {
+          setNotice(null);
+          setCin(next.cin);
+          setCout(next.cout);
+          setAdults(next.adults);
+          setKids(next.children);
+        })
+        .catch(e => {
+          setNotice(e.message);
+          setCin(hs.cin);
+          setCout(hs.cout);
+          setAdults(hs.adults);
+          setKids(hs.children);
+        });
+    }, 450);
+    return () => clearTimeout(id);
+  }, [live, hs, cin, cout, adults, kids, patch]);
+
+  // A coupon claimed on the Stays listing fills the field.
+  useEffect(() => {
+    if (live && !hs.offerCode) {
+      AsyncStorage.getItem('ss:coupon')
+        .then(c => c && setCode(x => x || c))
+        .catch(() => {});
+    }
+    // Only on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const couponOn = live && hs.discount > 0;
+  const applyCoupon = useCallback(() => {
+    const c = code.trim().toUpperCase();
+    if (!c) {
+      return;
+    }
+    patch({couponCode: c})
+      .then(() => setNotice(null))
+      .catch(e => setNotice(e.errors?.couponCode || e.message));
+  }, [code, patch]);
+  const removeCoupon = useCallback(() => {
+    setCode('');
+    AsyncStorage.removeItem('ss:coupon').catch(() => {});
+    patch({couponCode: null}).catch(e => setNotice(e.message));
+  }, [patch]);
+  const walletOn = live && hs.walletAmount > 0;
+  const toggleWallet = useCallback(
+    on => patch({useWallet: on}).catch(e => setNotice(e.errors?.useWallet || e.message)),
+    [patch],
+  );
+
+  // The hold ran out: say so, then go back to Stay Detail to reserve again.
+  useEffect(() => {
+    if (!hold.expired) {
+      return;
+    }
+    setNotice('Your hold expired. Reserve the room again to continue.');
+    const id = setTimeout(() => navigation.goBack(), 2500);
+    return () => clearTimeout(id);
+  }, [hold.expired, navigation]);
+
+  const localNights = Math.max(1, nightsBetween(cin, cout));
+  const nights = live ? hs.nights : localNights;
   const room = review.price * nights;
   const tax = Math.round(room * TAX);
-  const totalLabel = inr(room + tax);
+  const totalLabel = live ? money(hs.total) : inr(room + tax);
+  const payLabel = live ? money(hs.payable) : totalLabel;
   const nightsLabel = plural(nights, 'night', 'nights');
   const guestLabel = plural(adults + kids, 'guest', 'guests');
   const guestFull = plural(adults, 'adult', 'adults') + (kids ? ` · ${plural(kids, 'child', 'children')}` : '');
-  const cxl = cancellation(cin);
+  const cxl = live && hs.cancel?.text
+    ? {free: hs.cancel.free, color: hs.cancel.free ? '#4ADE80' : '#F87171', text: hs.cancel.text}
+    : cancellation(cin);
+  const inLabel = (live && hs.checkInLabel) || CHECK_IN;
+  const outLabel = (live && hs.checkOutLabel) || CHECK_OUT;
 
   const back = useCallback(() => navigation.goBack(), [navigation]);
   const home = useCallback(() => {
@@ -242,16 +332,40 @@ export default function StayReview({navigation, route}) {
   }, [pin, pout]);
 
   const pay = useCallback(() => {
-    if (phase !== 'idle') {
+    if (phase !== 'idle' || hold.expired || hold.busy) {
       return;
     }
     setPhase('busy');
+    if (live) {
+      setNotice(null);
+      hold
+        .pay(walletOn)
+        .then(res => {
+          if (res.requiresPayment) {
+            // PayU checkout is the next step; until then only wallet-covered stays complete.
+            setPhase('idle');
+            setNotice('Online payment (UPI / card) is being set up. Use your wallet balance if it covers the stay.');
+            return;
+          }
+          setPaid(toReceipt(res.booking));
+          setPhase('anim');
+          t2.current = setTimeout(() => setPhase('done'), CONFIRM_MS);
+        })
+        .catch(e => {
+          setPhase('idle');
+          setNotice(e.errors?.useWallet || e.message);
+          if (e.errors?.useWallet) {
+            patch({useWallet: false}).catch(() => {}); // balance changed: redraw the amount
+          }
+        });
+      return;
+    }
     setPaid({at: paidLabel(new Date()), ...mockReceipt()});
     t1.current = setTimeout(() => {
       setPhase('anim');
       t2.current = setTimeout(() => setPhase('done'), CONFIRM_MS);
     }, 1200);
-  }, [phase]);
+  }, [phase, live, hold, walletOn, patch]);
 
   // Android back: closes the calendar, waits out the payment, leaves success for Home.
   useEffect(() => {
@@ -283,6 +397,11 @@ export default function StayReview({navigation, route}) {
               <BackIcon />
             </GlassButton>
             <Text style={styles.h1}>Review booking</Text>
+            {live && hold.left != null ? (
+              <View style={[styles.held, hold.left < 60 && styles.heldLow]} accessibilityLabel={`Room held for ${clock(hold.left)}`}>
+                <Text style={[styles.heldT, hold.left < 60 && styles.heldTLow]}>{`Held · ${clock(hold.left)}`}</Text>
+              </View>
+            ) : null}
           </Stage>
 
           <Stage t={t} i={1} style={[styles.card, styles.stay]}>
@@ -316,7 +435,7 @@ export default function StayReview({navigation, route}) {
               <View style={styles.dcol}>
                 <Text style={styles.small}>Check-in</Text>
                 <DateVal flip={flip}>{short(cin)}</DateVal>
-                <Text style={styles.small}>{`from ${CHECK_IN}`}</Text>
+                <Text style={styles.small}>{`from ${inLabel}`}</Text>
               </View>
               <View style={styles.nights}>
                 <Text style={styles.nightsT}>{nightsLabel}</Text>
@@ -324,7 +443,7 @@ export default function StayReview({navigation, route}) {
               <View style={[styles.dcol, styles.dcolR]}>
                 <Text style={styles.small}>Check-out</Text>
                 <DateVal flip={flip}>{short(cout)}</DateVal>
-                <Text style={styles.small}>{`by ${CHECK_OUT}`}</Text>
+                <Text style={styles.small}>{`by ${outLabel}`}</Text>
               </View>
             </Pressable>
             <Stepper
@@ -333,9 +452,9 @@ export default function StayReview({navigation, route}) {
               noun="adults"
               value={adults}
               min={1}
-              max={MAX_ADULTS}
+              max={maxAdults}
               onDec={() => setAdults(a => Math.max(1, a - 1))}
-              onInc={() => setAdults(a => Math.min(MAX_ADULTS, a + 1))}
+              onInc={() => setAdults(a => Math.min(maxAdults, a + 1))}
             />
             <Stepper
               title="Children"
@@ -343,29 +462,98 @@ export default function StayReview({navigation, route}) {
               noun="children"
               value={kids}
               min={0}
-              max={MAX_KIDS}
+              max={maxKids}
               onDec={() => setKids(k => Math.max(0, k - 1))}
-              onInc={() => setKids(k => Math.min(MAX_KIDS, k + 1))}
+              onInc={() => setKids(k => Math.min(maxKids, k + 1))}
             />
           </Stage>
 
           <Stage t={t} i={3} style={[styles.card, styles.price]}>
-            <Text style={styles.cap}>PRICE BREAKDOWN</Text>
+            <Text style={styles.cap}>{hold.busy ? 'PRICE BREAKDOWN · UPDATING…' : 'PRICE BREAKDOWN'}</Text>
             <View style={styles.prow}>
-              <Text style={styles.prowK}>{`₹${inr(review.price)} × ${nightsLabel}`}</Text>
-              <Text style={styles.prowV}>{`₹${inr(room)}`}</Text>
+              <Text style={styles.prowK}>{`₹${live ? money(hs.rate) : inr(review.price)} × ${nightsLabel}`}</Text>
+              <Text style={styles.prowV}>{`₹${live ? money(hs.roomTotal) : inr(room)}`}</Text>
             </View>
+            {live && hs.extras > 0 ? (
+              <View style={styles.prow}>
+                <Text style={styles.prowK}>Extra guests</Text>
+                <Text style={styles.prowV}>{`₹${money(hs.extras)}`}</Text>
+              </View>
+            ) : null}
+            {couponOn ? (
+              <View style={styles.prow}>
+                <Text style={styles.prowK}>{`Coupon ${hs.offerCode || ''}`}</Text>
+                <Text style={[styles.prowV, styles.green]}>{`−₹${money(hs.discount)}`}</Text>
+              </View>
+            ) : null}
             <View style={styles.prow}>
-              <Text style={styles.prowK}>Taxes & fees (5%)</Text>
-              <Text style={styles.prowV}>{`₹${inr(tax)}`}</Text>
+              <Text style={styles.prowK}>{live ? hs.taxLabel : 'Taxes & fees (5%)'}</Text>
+              <Text style={styles.prowV}>{`₹${live ? money(hs.tax) : inr(tax)}`}</Text>
             </View>
             <View style={styles.rule} />
             <View style={styles.totalRow}>
               <Text style={styles.totalK}>Total</Text>
               <Total label={totalLabel} />
             </View>
+            {walletOn ? (
+              <View style={styles.prow}>
+                <Text style={styles.prowK}>Paid from wallet</Text>
+                <Text style={[styles.prowV, styles.green]}>{`−₹${money(hs.walletAmount)}`}</Text>
+              </View>
+            ) : null}
             <Text style={styles.small115}>{`${guestLabel} · ${nightsLabel}`}</Text>
           </Stage>
+
+          {live ? (
+            <Stage t={t} i={4} style={[styles.card, styles.price]}>
+              <Text style={styles.cap}>COUPON</Text>
+              <View style={styles.cRow}>
+                <TextInput
+                  value={code}
+                  onChangeText={setCode}
+                  editable={!couponOn}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  placeholder="Enter coupon code"
+                  placeholderTextColor={MUTED}
+                  returnKeyType="done"
+                  onSubmitEditing={applyCoupon}
+                  style={styles.cInput}
+                />
+                <PressScale
+                  to={0.95}
+                  onPress={couponOn ? removeCoupon : applyCoupon}
+                  accessibilityRole="button"
+                  style={[styles.cBtn, couponOn && styles.cBtnOff]}>
+                  <Text style={[styles.cBtnT, couponOn && styles.cBtnTOff]}>{couponOn ? 'Remove' : 'Apply'}</Text>
+                </PressScale>
+              </View>
+              {couponOn ? (
+                <Text style={[styles.small12, styles.green]}>{`Applied · you save ₹${money(hs.discount)}`}</Text>
+              ) : hs.offer?.code && !hs.offer.applied && hs.offer.reason ? (
+                <Text style={[styles.small12, styles.red]}>{hs.offer.reason}</Text>
+              ) : null}
+            </Stage>
+          ) : null}
+
+          {live && hs.wallet?.available && hs.wallet.balance > 0 ? (
+            <Stage t={t} i={4} style={[styles.card, styles.wallet]}>
+              <View style={styles.walletCopy}>
+                <Text style={styles.walletT}>Pay from wallet</Text>
+                <Text style={styles.small12}>{`Balance ₹${money(hs.wallet.balance)}`}</Text>
+              </View>
+              <Switch
+                value={walletOn}
+                onValueChange={toggleWallet}
+                disabled={hold.busy}
+                trackColor={{false: 'rgba(255,255,255,0.15)', true: colors.gold}}
+                thumbColor={walletOn ? colors.ink : '#E6E0D6'}
+                accessibilityLabel="Pay from wallet"
+              />
+            </Stage>
+          ) : null}
+
+          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
           <Stage t={t} i={4} style={[styles.cxl, cxl.free ? styles.cxlOk : styles.cxlNo]}>
             <View style={[styles.cdot, {backgroundColor: cxl.color}]} />
@@ -386,7 +574,7 @@ export default function StayReview({navigation, route}) {
             )}
             <View>
               <Text style={styles.payK}>Total payable</Text>
-              <Text style={styles.payV}>{`₹${totalLabel}`}</Text>
+              <Text style={styles.payV}>{`₹${payLabel}`}</Text>
             </View>
             <View style={styles.pgo}>
               {busy ? <Spinner /> : null}
@@ -424,7 +612,7 @@ export default function StayReview({navigation, route}) {
             nights={nights}
           />
         ) : null}
-        {prep ? (
+        {prep && paid ? (
           <Success
             play={phase === 'done'}
             review={review}
@@ -433,7 +621,7 @@ export default function StayReview({navigation, route}) {
             outShort={short(cout)}
             nightsLabel={nightsLabel}
             guestFull={guestFull}
-            totalLabel={totalLabel}
+            totalLabel={paid.total || totalLabel}
             paidAt={paid.at}
             insets={insets}
             onHome={home}
@@ -451,7 +639,34 @@ const styles = StyleSheet.create({
   stg: {gap: 14, paddingHorizontal: 20},
   top: {flexDirection: 'row', alignItems: 'center', gap: 12},
   gbtn: {backgroundColor: colors.card, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'},
-  h1: {fontFamily: fonts.extrabold, fontSize: 19, color: colors.white},
+  h1: {fontFamily: fonts.extrabold, fontSize: 19, color: colors.white, flex: 1},
+  held: {paddingHorizontal: 10, height: 28, borderRadius: 14, justifyContent: 'center', backgroundColor: colors.goldA(0.14)},
+  heldLow: {backgroundColor: 'rgba(248,113,113,0.16)'},
+  heldT: {fontFamily: fonts.bold, fontSize: 12, color: colors.gold, fontVariant: ['tabular-nums']},
+  heldTLow: {color: '#FCA5A5'},
+  green: {color: '#6EE7A0'},
+  red: {color: '#FCA5A5'},
+  notice: {fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 18, color: '#FCA5A5', paddingHorizontal: 4},
+  cRow: {flexDirection: 'row', gap: 10},
+  cInput: {
+    flex: 1,
+    height: 44,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    letterSpacing: 1,
+    color: colors.cream,
+  },
+  cBtn: {height: 44, paddingHorizontal: 18, borderRadius: 14, justifyContent: 'center', backgroundColor: colors.gold},
+  cBtnOff: {backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.goldA(0.4)},
+  cBtnT: {fontFamily: fonts.bold, fontSize: 13, color: colors.ink},
+  cBtnTOff: {color: colors.gold},
+  wallet: {flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12},
+  walletCopy: {flex: 1, gap: 2},
+  walletT: {fontFamily: fonts.bold, fontSize: 14, color: colors.cream},
   card: {borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border},
   clip: {overflow: 'hidden'},
   cap: {fontFamily: fonts.bold, fontSize: 10.5, letterSpacing: ls(0.14, 10.5), color: '#8E887F'},

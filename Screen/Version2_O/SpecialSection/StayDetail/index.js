@@ -25,8 +25,11 @@ import Nearby from './Nearby';
 import BookingBar from './BookingBar';
 import PolicySheet from './PolicySheet';
 import {markTap, useFirstFrame, useJsFps, useRenderCount} from '../perf';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {booking, inr} from './data';
-import {stayTotal, useStayDetail} from '../api/stays';
+import {defaultDates, short} from '../StayReview/data';
+import {createHold, day, money, releaseBooking, stayTotal, useStayDetail} from '../api/stays';
+import {USE_MOCK} from '../api/client';
 import {ErrorCard, Skeleton} from '../api/ui';
 
 const CARD = cssAngle(160);
@@ -74,13 +77,16 @@ const MiniHeader = memo(function MiniHeader({scrollY, inset, stay, suiteName, to
 /** `.toast`: drops in (.5s spring) with opacity .25s; `ref.show()` shows it for 1.8s. */
 const Toast = forwardRef(function Toast({top}, ref) {
   const [show, setShow] = useState(false);
+  const [msg, setMsg] = useState(null);
   const t = useRef(null);
   useEffect(() => () => clearTimeout(t.current), []);
   useImperativeHandle(ref, () => ({
-    show() {
+    // show() = "Link copied"; show(text) = a message (e.g. a failed hold).
+    show(text) {
       clearTimeout(t.current);
+      setMsg(text || null);
       setShow(true);
-      t.current = setTimeout(() => setShow(false), 1800);
+      t.current = setTimeout(() => setShow(false), text ? 3200 : 1800);
     },
   }));
   const y = useTo(show ? 0 : -20, 500, E.spring);
@@ -89,8 +95,8 @@ const Toast = forwardRef(function Toast({top}, ref) {
   return (
     <View pointerEvents="none" style={[styles.toastRow, {top}]}>
       <Animated.View accessibilityLiveRegion="polite" style={[styles.toast, a]}>
-        <CheckIcon color={colors.ink} />
-        <Text style={styles.toastText}>Link copied</Text>
+        {msg ? null : <CheckIcon color={colors.ink} />}
+        <Text style={styles.toastText}>{msg || 'Link copied'}</Text>
       </Animated.View>
     </View>
   );
@@ -253,13 +259,47 @@ export default function StayDetail({navigation, route}) {
     [navigation],
   );
   const share = useCallback(() => toast.current?.show(), []);
-  const pickSuite = useCallback(id => {
-    clearTimeout(t1.current);
-    setSuite(id);
-    setPhase('idle');
-    setSheet(false);
+  // The room held by Reserve (POST /holds). Released if the guest picks another
+  // suite or leaves without continuing; Review Booking owns it once opened.
+  const [held, setHeld] = useState(null);
+  const heldRef = useRef(null);
+  heldRef.current = held;
+  const handedOff = useRef(false);
+  const drop = useCallback(() => {
+    if (heldRef.current) {
+      releaseBooking(heldRef.current.bookingId).catch(() => {});
+      setHeld(null);
+    }
   }, []);
-  const reserve = useCallback(() => {
+  useEffect(
+    () => () => {
+      if (!handedOff.current && heldRef.current) {
+        releaseBooking(heldRef.current.bookingId).catch(() => {});
+      }
+    },
+    [],
+  );
+  // Back from Review (which released the hold): start over from Reserve.
+  useEffect(() => {
+    if (isFocused && handedOff.current) {
+      handedOff.current = false;
+      setHeld(null);
+      setPhase('idle');
+      setSheet(false);
+    }
+  }, [isFocused]);
+
+  const pickSuite = useCallback(
+    id => {
+      clearTimeout(t1.current);
+      drop();
+      setSuite(id);
+      setPhase('idle');
+      setSheet(false);
+    },
+    [drop],
+  );
+  const reserve = useCallback(async () => {
     if (phase === 'loading') {
       return;
     }
@@ -268,17 +308,35 @@ export default function StayDetail({navigation, route}) {
       return;
     }
     setPhase('loading');
-    t1.current = setTimeout(() => {
+    if (USE_MOCK.stays) {
+      t1.current = setTimeout(() => {
+        setPhase('done');
+        setSheet(true);
+      }, 1200);
+      return;
+    }
+    try {
+      const {cin, cout} = defaultDates();
+      const couponCode = await AsyncStorage.getItem('ss:coupon').catch(() => null);
+      const res = await createHold({propertyId: stay.id, roomTypeId: cur.id, cin, cout, adults: 1, couponCode});
+      setHeld(res.booking);
       setPhase('done');
       setSheet(true);
-    }, 1200);
-  }, [phase]);
+    } catch (e) {
+      setPhase('idle');
+      toast.current?.show(e.message);
+      if (e.status === 409) {
+        q.refresh(); // sold out: reload the suites
+      }
+    }
+  }, [phase, stay, cur, q]);
   const closeSheet = useCallback(() => setSheet(false), []);
   const openPolicy = useCallback(() => setPolicy(true), []);
   const closePolicy = useCallback(() => setPolicy(false), []);
   const pay = useCallback(
     () => {
       markTap('StayReview');
+      handedOff.current = !!held;
       navigation.navigate('StayReview', {
         stayId,
         suiteId: cur.id,
@@ -291,10 +349,16 @@ export default function StayDetail({navigation, route}) {
         propertyId: stay.id,
         stay: {name: stay.name, short: stay.short, rate: stay.rate, address: stay.address, taxPct: stay.taxPct},
         suite: {id: cur.id, name: cur.name, spec: cur.spec, price: cur.price, img: cur.img, maxAdults: cur.maxAdults, maxChildren: cur.maxChildren},
+        booking: held,
       });
     },
-    [navigation, stayId, stay, cur, total],
+    [navigation, stayId, stay, cur, total, held],
   );
+  const sheetSub = held
+    ? `${short(day(held.checkIn))} – ${short(day(held.checkOut))} · ${held.adults} guest${held.adults > 1 ? 's' : ''} · ₹${money(
+        held.pricing?.total,
+      )} incl. taxes`
+    : `${booking.dates} · ${booking.guests} guest · ₹${totalLabel} incl. taxes`;
 
   // A stay that no longer exists (404) goes back to the listing.
   const gone = q.error?.status === 404;
@@ -377,6 +441,7 @@ export default function StayDetail({navigation, route}) {
             bottom={barBottom}
             phase={phase}
             sheet={sheet}
+            sheetSub={sheetSub}
             suiteName={cur.name}
             stayShort={stay.short}
             totalLabel={totalLabel}

@@ -102,6 +102,23 @@ export function paidLabel(p) {
 
 /** Stay + suite shown on the review card, from StayDetail's route params. */
 export function reviewFor(params = {}) {
+  // Live stays pass what Stay Detail loaded from the API.
+  if (params.stay && params.suite) {
+    const {stay, suite} = params;
+    return {
+      name: stay.name,
+      short: stay.short,
+      rate: stay.rate,
+      place: stay.address.split(', ').pop(),
+      address: stay.address,
+      room: suite.spec ? `${suite.name} · ${suite.spec}` : suite.name,
+      price: suite.price,
+      img: suite.img || images.balcony,
+      adults: Math.max(1, params.booking?.adults || params.guests || 1),
+      maxAdults: suite.maxAdults || MAX_ADULTS,
+      maxKids: suite.maxChildren ?? MAX_KIDS,
+    };
+  }
   const stay = stayFor(params.stayId);
   const suite = suites.find(s => s.id === params.suiteId) || suites[1];
   return {

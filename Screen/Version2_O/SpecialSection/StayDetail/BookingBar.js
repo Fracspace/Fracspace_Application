@@ -15,7 +15,6 @@ import Svg, {Path} from 'react-native-svg';
 import {colors, fonts, ls} from '../theme';
 import {E, PressScale, useLoop, usePressScale} from '../anim';
 import {ArrowRight, CHECK_D, CloseIcon, Odo, Sweep, useLazy, useShot, useTo} from './bits';
-import {booking} from './data';
 import {useRenderCount} from '../perf';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -113,7 +112,7 @@ function Reserve({phase, onPress}) {
  * `.sheet` / `.sheet.show`: translateY(40px) scale(.96) → none (.6s spring),
  * opacity .3s. A pan down past 60px (or a flick) closes it.
  */
-function Sheet({show, bottom, suiteName, stayShort, totalLabel, onClose, onPay}) {
+function Sheet({show, bottom, suiteName, stayShort, sub, onClose, onPay}) {
   const t = useTo(show ? 1 : 0, 600, E.spring);
   const o = useTo(show ? 1 : 0, 300);
   const drag = useSharedValue(0);
@@ -164,9 +163,7 @@ function Sheet({show, bottom, suiteName, stayShort, totalLabel, onClose, onPay})
             <Text style={styles.sheetTitle}>
               {suiteName} · {stayShort}
             </Text>
-            <Text style={styles.sheetSub}>
-              {booking.dates} · {booking.guests} guest · ₹{totalLabel} incl. taxes
-            </Text>
+            <Text style={styles.sheetSub}>{sub}</Text>
           </View>
           <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close summary" style={styles.close}>
             <CloseIcon color={colors.ink} />
@@ -181,7 +178,7 @@ function Sheet({show, bottom, suiteName, stayShort, totalLabel, onClose, onPay})
   );
 }
 
-function BookingBar({bottom, phase, sheet, suiteName, stayShort, totalLabel, onReserve, onCloseSheet, onPay}) {
+function BookingBar({bottom, phase, sheet, sheetSub, suiteName, stayShort, totalLabel, onReserve, onCloseSheet, onPay}) {
   useRenderCount('BookingBar');
   const [sheetMounted, sheetShown] = useLazy(sheet);
   return (
@@ -192,7 +189,7 @@ function BookingBar({bottom, phase, sheet, suiteName, stayShort, totalLabel, onR
           bottom={bottom + BAR_H + 12}
           suiteName={suiteName}
           stayShort={stayShort}
-          totalLabel={totalLabel}
+          sub={sheetSub}
           onClose={onCloseSheet}
           onPay={onPay}
         />

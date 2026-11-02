@@ -408,3 +408,90 @@ export const useStayDetail = idOrSlug =>
   useQuery('stays:property:' + idOrSlug, () => getProperty(idOrSlug).then(toStay), {
     mock: USE_MOCK.stays ? mockStay(idOrSlug) : undefined,
   });
+
+// ---- Booking: hold → review (PATCH) → pay / release
+const opId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** POST /holds for one room. `cin` / `cout` are local Dates. */
+export const createHold = ({propertyId, roomTypeId, cin, cout, adults = 1, children = 0, couponCode}) =>
+  request('POST', `${P}/holds`, {
+    body: {
+      propertyId,
+      roomTypeId,
+      checkIn: ymd(cin),
+      checkOut: ymd(cout),
+      rooms: 1,
+      adults,
+      children,
+      ...(couponCode ? {couponCode} : null),
+      idempotencyKey: opId(),
+    },
+  });
+
+/** PATCH a held booking; dates as local Dates. Returns {booking, quote}. */
+export const patchBooking = (id, {cin, cout, ...rest}) =>
+  request('PATCH', `${P}/bookings/${id}`, {
+    body: {...(cin ? {checkIn: ymd(cin)} : null), ...(cout ? {checkOut: ymd(cout)} : null), ...rest},
+  });
+export const releaseBooking = id => request('POST', `${P}/bookings/${id}/release`);
+// Only PayU is integrated, so it is always asked for by name.
+export const payBooking = (id, useWallet) => request('POST', `${P}/bookings/${id}/pay`, {body: {gateway: 'payu', useWallet}});
+
+/** Money with paise only when there are any: 6298.95 → "6,298.95", 5999 → "5,999". */
+export function money(n) {
+  const v = Math.round((Number(n) || 0) * 100) / 100;
+  const whole = sd.inr(Math.floor(v));
+  const paise = Math.round((v - Math.floor(v)) * 100);
+  return paise ? `${whole}.${String(paise).padStart(2, '0')}` : whole;
+}
+
+/**
+ * Booking + (optional) quote → what Review Booking draws. The quote (from
+ * PATCH) is newer when present; a fresh hold only has the booking's pricing.
+ */
+export function toReviewState(booking, quote) {
+  const pr = quote?.pricing || booking.pricing || {};
+  const nights = booking.nights || (pr.nightly || []).length || 1;
+  const walletAmount = quote?.wallet?.amount ?? booking.wallet?.amount ?? 0;
+  const cx = quote?.cancellation || booking.cancellationPolicy || null;
+  return {
+    id: booking.bookingId,
+    status: booking.status,
+    cin: day(booking.checkIn),
+    cout: day(booking.checkOut),
+    adults: booking.adults || 1,
+    children: booking.children || 0,
+    checkInLabel: booking.property?.checkInLabel || '',
+    checkOutLabel: booking.property?.checkOutLabel || '',
+    holdExpiresAt: booking.holdExpiresAt ? new Date(booking.holdExpiresAt).getTime() : null,
+    nights,
+    rate: pr.nightly?.[0]?.rate ?? (pr.roomTotal || 0) / nights,
+    roomTotal: pr.roomTotal || 0,
+    extras: pr.extrasTotal || 0,
+    discount: pr.discount || 0,
+    offerCode: pr.offer?.code || null,
+    taxLabel: pr.taxLabel || 'Taxes & fees',
+    tax: pr.tax || 0,
+    total: pr.total || 0,
+    offer: quote?.offer || null, // {code, applied, reason}
+    wallet: quote?.wallet || null, // {available, balance, amount}
+    walletAmount,
+    payable: quote?.payable ?? Math.max(0, (pr.total || 0) - walletAmount),
+    cancel: cx ? {free: !!cx.freeCancellation, text: cx.summary || ''} : null,
+  };
+}
+
+/** The confirmed booking → Success screen's receipt. */
+export function toReceipt(b) {
+  const pay = b.payment || {};
+  const method =
+    pay.method === 'wallet' ? 'Wallet' : (pay.instrument || pay.gateway || '').replace(/^\w/, c => c.toUpperCase());
+  return {
+    bookingId: b.referenceCode || b.bookingId,
+    txnId: pay.transactionId || '—',
+    method: method || '—',
+    at: pay.paidAt ? stamp(pay.paidAt) : '',
+    total: money(b.pricing?.total ?? pay.amount ?? 0),
+  };
+}
