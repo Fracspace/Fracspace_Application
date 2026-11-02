@@ -28,6 +28,9 @@ export class ApiError extends Error {
   }
 }
 
+/** The first field error (e.g. "Check-in is in the past"), else the message. */
+export const errText = e => (e?.errors && Object.values(e.errors).find(v => typeof v === 'string')) || e?.message;
+
 const getToken = () => AsyncStorage.getItem('mytoken').catch(() => null);
 
 async function headers() {

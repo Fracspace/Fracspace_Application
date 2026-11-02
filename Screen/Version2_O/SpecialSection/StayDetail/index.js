@@ -28,8 +28,8 @@ import {markTap, useFirstFrame, useJsFps, useRenderCount} from '../perf';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {booking, inr} from './data';
 import {defaultDates, short} from '../StayReview/data';
-import {createHold, day, money, releaseBooking, stayTotal, useStayDetail} from '../api/stays';
-import {USE_MOCK} from '../api/client';
+import {createHold, day, money, releaseBooking, roomsFor, stayTotal, useStayDetail} from '../api/stays';
+import {errText, USE_MOCK} from '../api/client';
 import {ErrorCard, Skeleton} from '../api/ui';
 
 const CARD = cssAngle(160);
@@ -106,7 +106,7 @@ const Toast = forwardRef(function Toast({top}, ref) {
 const ABOUT_LINES = 4;
 const guests = b => {
   const n = (b.adults || 1) + (b.children || 0);
-  return `${n} guest${n > 1 ? 's' : ''}`;
+  return `${n} guest${n > 1 ? 's' : ''}${b.rooms > 1 ? ` · ${b.rooms} rooms` : ''}`;
 };
 
 /**
@@ -321,18 +321,25 @@ export default function StayDetail({navigation, route}) {
       return;
     }
     try {
-      const {cin, cout} = trip ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : defaultDates();
-      // The search's guests, within what this suite takes.
-      const adults = Math.min(cur.maxAdults || 1, trip?.adults || 1);
-      const children = Math.min(cur.maxChildren || 0, trip?.children || 0);
+      // The search's dates, unless they have passed since (then tomorrow).
+      const dated = trip && day(trip.checkIn) >= defaultDates().cin;
+      const {cin, cout} = dated ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : defaultDates();
+      // The search's guests: as many rooms of this suite as they need.
+      const want = {a: trip?.adults || 1, c: cur.maxChildren ? trip?.children || 0 : 0};
+      const rooms = roomsFor(want.a, want.c, cur);
+      const adults = Math.min(want.a, rooms * (cur.maxAdults || 2));
+      const children = Math.min(want.c, rooms * (cur.maxChildren || 0));
       const couponCode = await AsyncStorage.getItem('ss:coupon').catch(() => null);
-      const res = await createHold({propertyId: stay.id, roomTypeId: cur.id, cin, cout, adults, children, couponCode});
+      const res = await createHold({propertyId: stay.id, roomTypeId: cur.id, cin, cout, rooms, adults, children, couponCode});
+      if (adults < want.a || children < (trip?.children || 0)) {
+        toast.current?.show(`Held for ${adults} adults${children ? ` and ${children} children` : ''}, the most this room type takes`);
+      }
       setHeld(res.booking);
       setPhase('done');
       setSheet(true);
     } catch (e) {
       setPhase('idle');
-      toast.current?.show(e.message);
+      toast.current?.show(errText(e));
       if (e.status === 409) {
         q.refresh(); // sold out: reload the suites
       }

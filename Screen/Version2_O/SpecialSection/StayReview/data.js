@@ -33,15 +33,11 @@ export function today() {
   return t;
 }
 
-/** The design's default stay (15–16 Oct 2026), moved to today + 2 once that has passed. */
+/** The default stay: check in tomorrow, one night. */
 export function defaultDates() {
-  const t = today();
-  let cin = new Date(2026, 9, 15);
-  let cout = new Date(2026, 9, 16);
-  if (cin < t) {
-    cin = new Date(t.getTime() + 2 * DAY);
-    cout = new Date(cin.getTime() + DAY);
-  }
+  const cin = new Date(today().getTime() + DAY);
+  cin.setHours(0, 0, 0, 0); // a DST change in between can shift the hour
+  const cout = new Date(cin.getFullYear(), cin.getMonth(), cin.getDate() + 1);
   return {cin, cout};
 }
 

@@ -25,20 +25,25 @@ const GUESTS = [
 ];
 const DURS = ['A weekend', 'A week', 'A month'];
 
-export const initialSearch = {
-  query: '',
-  city: 'Hyderabad',
-  mode: 'dates', // or 'flex'
-  m: 9,
-  y: 2026,
-  in: new Date(2026, 9, 15),
-  out: new Date(2026, 9, 16),
-  dur: 'A weekend',
-  mon: '',
-  g: {a: 1, c: 0, i: 0},
-  applied: false, // set by "Search stays"; the capsules then show the choices
-  pillCity: '', // the destination capsule that is on
-};
+/** A fresh search: tomorrow for one night (made on open, so never in the past). */
+export function initialSearch() {
+  const t = new Date();
+  const cin = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
+  return {
+    query: '',
+    city: 'Hyderabad',
+    mode: 'dates', // or 'flex'
+    m: cin.getMonth(),
+    y: cin.getFullYear(),
+    in: cin,
+    out: new Date(cin.getFullYear(), cin.getMonth(), cin.getDate() + 1),
+    dur: 'A weekend',
+    mon: '',
+    g: {a: 1, c: 0, i: 0},
+    applied: false, // set by "Search stays"; the capsules then show the choices
+    pillCity: '', // the destination capsule that is on
+  };
+}
 
 const sameDay = (a, b) => !!a && !!b && a.toDateString() === b.toDateString();
 
@@ -211,10 +216,15 @@ function Pick({label, on, onPress}) {
 }
 
 /** One calendar day; re-renders only when its own range state changes. */
-const Day = memo(function Day({d, st, en, inR, rng, label, onPick}) {
+const Day = memo(function Day({d, st, en, inR, rng, past, label, onPick}) {
   const end = st || en;
   return (
-    <Pressable onPress={() => onPick(d)} accessibilityLabel={label} style={[styles.dy, inR && styles.dyIn]}>
+    <Pressable
+      onPress={() => onPick(d)}
+      disabled={past}
+      accessibilityLabel={label}
+      accessibilityState={{disabled: past}}
+      style={[styles.dy, inR && styles.dyIn, past && styles.off]}>
       {end && rng ? <View style={[styles.half, st ? styles.halfR : styles.halfL]} /> : null}
       {end ? <Animated.View entering={dayPop} style={styles.dyEnd} /> : null}
       <Text style={[styles.dyText, end && styles.dyTextEnd]}>{d}</Text>
@@ -245,6 +255,9 @@ function When({s, patch}) {
     cells.push(<View key={'e' + k} style={styles.dy} />);
   }
   const rng = !!s.in && !!s.out && !sameDay(s.in, s.out);
+  const now = new Date();
+  const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const atFirst = s.y < t0.getFullYear() || (s.y === t0.getFullYear() && s.m <= t0.getMonth());
   for (let d = 1; d <= nd; d++) {
     const dt = new Date(s.y, s.m, d);
     cells.push(
@@ -255,6 +268,7 @@ function When({s, patch}) {
         en={sameDay(dt, s.out)}
         inR={!!s.in && !!s.out && dt > s.in && dt < s.out}
         rng={rng}
+        past={dt < t0}
         label={`${d} ${MONTHS_LONG[s.m]}`}
         onPick={pickDay}
       />,
@@ -264,7 +278,6 @@ function When({s, patch}) {
     const d = new Date(s.y, s.m + n, 1);
     patch({m: d.getMonth(), y: d.getFullYear()});
   };
-  const now = new Date();
   const mons = [0, 1, 2, 3].map(k => {
     const d = new Date(now.getFullYear(), now.getMonth() + k, 1);
     return MONTHS[d.getMonth()] + ' ' + d.getFullYear();
@@ -293,7 +306,12 @@ function When({s, patch}) {
               {MONTHS_LONG[s.m]} {s.y}
             </Text>
             <View style={styles.navs}>
-              <PressScale to={0.92} onPress={() => shift(-1)} accessibilityLabel="Previous month" style={styles.mnav}>
+              <PressScale
+                to={0.92}
+                disabled={atFirst}
+                onPress={() => shift(-1)}
+                accessibilityLabel="Previous month"
+                style={[styles.mnav, atFirst && styles.off]}>
                 <ChevronSideIcon />
               </PressScale>
               <PressScale to={0.92} onPress={() => shift(1)} accessibilityLabel="Next month" style={styles.mnav}>
@@ -420,7 +438,9 @@ export default function SearchSheet({init, step: initStep, onClose}) {
     } else if (s.step === 'when') {
       patch({step: 'who'});
     } else {
-      done({applied: true, pillCity: s.city || ''});
+      // Only a check-in picked: stay one night.
+      const out = s.in && !s.out ? new Date(s.in.getFullYear(), s.in.getMonth(), s.in.getDate() + 1) : s.out;
+      done({applied: true, pillCity: s.city || '', out});
     }
   };
   const reset = () => {

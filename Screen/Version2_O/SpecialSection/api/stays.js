@@ -418,15 +418,25 @@ export const useStayDetail = (idOrSlug, trip) =>
 const opId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 export const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** POST /holds for one room. `cin` / `cout` are local Dates. */
-export const createHold = ({propertyId, roomTypeId, cin, cout, adults = 1, children = 0, couponCode}) =>
+// One booking can hold several rooms of the same type; the server allows
+// up to `rooms × maxAdults` adults and `rooms × maxChildren` children.
+export const MAX_ROOMS = 5;
+/** Rooms of `suite` needed for these guests (1 … MAX_ROOMS). */
+export function roomsFor(adults, children, suite) {
+  const a = Math.ceil((adults || 1) / (suite?.maxAdults || 2));
+  const c = suite?.maxChildren ? Math.ceil((children || 0) / suite.maxChildren) : 1;
+  return Math.min(MAX_ROOMS, Math.max(1, a, c));
+}
+
+/** POST /holds. `cin` / `cout` are local Dates. */
+export const createHold = ({propertyId, roomTypeId, cin, cout, rooms = 1, adults = 1, children = 0, couponCode}) =>
   request('POST', `${P}/holds`, {
     body: {
       propertyId,
       roomTypeId,
       checkIn: ymd(cin),
       checkOut: ymd(cout),
-      rooms: 1,
+      rooms,
       adults,
       children,
       ...(couponCode ? {couponCode} : null),
@@ -465,6 +475,7 @@ export function toReviewState(booking, quote) {
     status: booking.status,
     cin: day(booking.checkIn),
     cout: day(booking.checkOut),
+    rooms: booking.rooms || 1,
     adults: booking.adults || 1,
     children: booking.children || 0,
     checkInLabel: booking.property?.checkInLabel || '',

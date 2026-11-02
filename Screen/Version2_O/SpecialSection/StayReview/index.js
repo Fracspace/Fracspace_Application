@@ -19,7 +19,8 @@ import Calendar from './Calendar';
 import Confirming, {CONFIRM_MS} from './Confirming';
 import Success from './Success';
 import {useFirstFrame, useJsFps, useRenderCount} from '../perf';
-import {day, money, toReceipt} from '../api/stays';
+import {day, MAX_ROOMS, money, roomsFor, toReceipt} from '../api/stays';
+import {errText} from '../api/client';
 import {clock, useHold} from './useHold';
 import {
   CHECK_IN,
@@ -40,7 +41,7 @@ import {
 } from './data';
 
 const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-const COUNTS = ['0', '1', '2', '3', '4'];
+const COUNTS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const MUTED = '#ADA597';
 
 /** `.stg > *`: rise (.7s --out) staggered 40 / 120 / 200 / 280 / 360ms. */
@@ -153,7 +154,11 @@ export default function StayReview({navigation, route}) {
   const today = useMemo(todayDate, []);
   // Mock mode: the search's dates and guests when Stays passed them.
   const first = useMemo(
-    () => (params?.trip ? {cin: day(params.trip.checkIn), cout: day(params.trip.checkOut)} : defaultDates()),
+    () => {
+      const d = defaultDates();
+      const trip = params?.trip;
+      return trip && day(trip.checkIn) >= d.cin ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : d;
+    },
     [params],
   );
 
@@ -161,12 +166,18 @@ export default function StayReview({navigation, route}) {
   const hold = useHold(params?.booking || null);
   const hs = hold.state;
   const live = hold.live && !!hs;
-  const maxAdults = review.maxAdults || MAX_ADULTS;
-  const maxKids = review.maxKids ?? MAX_KIDS;
+  // Per room; more guests take more rooms of the same type (up to MAX_ROOMS).
+  const perRoom = useMemo(
+    () => ({maxAdults: review.maxAdults || MAX_ADULTS, maxChildren: review.maxKids ?? MAX_KIDS}),
+    [review],
+  );
+  const maxAdults = live ? perRoom.maxAdults * MAX_ROOMS : perRoom.maxAdults;
+  const maxKids = live ? perRoom.maxChildren * MAX_ROOMS : perRoom.maxChildren;
   const [cin, setCin] = useState(hs ? hs.cin : first.cin);
   const [cout, setCout] = useState(hs ? hs.cout : first.cout);
   const [adults, setAdults] = useState(hs ? hs.adults : Math.min(maxAdults, params?.trip?.adults || review.adults));
   const [kids, setKids] = useState(hs ? hs.children : Math.min(maxKids, params?.trip?.children || 0));
+  const rooms = live ? roomsFor(adults, kids, perRoom) : 1;
   const [notice, setNotice] = useState(null);
   const [code, setCode] = useState(hs?.offerCode || '');
   const [flip, setFlip] = useState(0);
@@ -222,12 +233,16 @@ export default function StayReview({navigation, route}) {
       return;
     }
     const same =
-      cin.getTime() === hs.cin.getTime() && cout.getTime() === hs.cout.getTime() && adults === hs.adults && kids === hs.children;
+      cin.getTime() === hs.cin.getTime() &&
+      cout.getTime() === hs.cout.getTime() &&
+      adults === hs.adults &&
+      kids === hs.children &&
+      rooms === hs.rooms;
     if (same) {
       return;
     }
     const id = setTimeout(() => {
-      patch({cin, cout, adults, children: kids})
+      patch({cin, cout, rooms, adults, children: kids})
         .then(next => {
           setNotice(null);
           setCin(next.cin);
@@ -236,7 +251,7 @@ export default function StayReview({navigation, route}) {
           setKids(next.children);
         })
         .catch(e => {
-          setNotice(e.message);
+          setNotice(errText(e));
           setCin(hs.cin);
           setCout(hs.cout);
           setAdults(hs.adults);
@@ -244,7 +259,7 @@ export default function StayReview({navigation, route}) {
         });
     }, 450);
     return () => clearTimeout(id);
-  }, [live, hs, cin, cout, adults, kids, patch]);
+  }, [live, hs, cin, cout, rooms, adults, kids, patch]);
 
   // A coupon claimed on the Stays listing fills the field.
   useEffect(() => {
@@ -264,16 +279,16 @@ export default function StayReview({navigation, route}) {
     }
     patch({couponCode: c})
       .then(() => setNotice(null))
-      .catch(e => setNotice(e.errors?.couponCode || e.message));
+      .catch(e => setNotice(errText(e)));
   }, [code, patch]);
   const removeCoupon = useCallback(() => {
     setCode('');
     AsyncStorage.removeItem('ss:coupon').catch(() => {});
-    patch({couponCode: null}).catch(e => setNotice(e.message));
+    patch({couponCode: null}).catch(e => setNotice(errText(e)));
   }, [patch]);
   const walletOn = live && hs.walletAmount > 0;
   const toggleWallet = useCallback(
-    on => patch({useWallet: on}).catch(e => setNotice(e.errors?.useWallet || e.message)),
+    on => patch({useWallet: on}).catch(e => setNotice(errText(e))),
     [patch],
   );
 
@@ -294,8 +309,9 @@ export default function StayReview({navigation, route}) {
   const totalLabel = live ? money(hs.total) : inr(room + tax);
   const payLabel = live ? money(hs.payable) : totalLabel;
   const nightsLabel = plural(nights, 'night', 'nights');
-  const guestLabel = plural(adults + kids, 'guest', 'guests');
-  const guestFull = plural(adults, 'adult', 'adults') + (kids ? ` · ${plural(kids, 'child', 'children')}` : '');
+  const roomsLabel = rooms > 1 ? ` · ${rooms} rooms` : '';
+  const guestLabel = plural(adults + kids, 'guest', 'guests') + roomsLabel;
+  const guestFull = plural(adults, 'adult', 'adults') + (kids ? ` · ${plural(kids, 'child', 'children')}` : '') + roomsLabel;
   const cxl = live && hs.cancel?.text
     ? {free: hs.cancel.free, color: hs.cancel.free ? '#4ADE80' : '#F87171', text: hs.cancel.text}
     : cancellation(cin);
@@ -357,7 +373,7 @@ export default function StayReview({navigation, route}) {
         })
         .catch(e => {
           setPhase('idle');
-          setNotice(e.errors?.useWallet || e.message);
+          setNotice(errText(e));
           if (e.errors?.useWallet) {
             patch({useWallet: false}).catch(() => {}); // balance changed: redraw the amount
           }
@@ -452,7 +468,7 @@ export default function StayReview({navigation, route}) {
             </Pressable>
             <Stepper
               title="Adults"
-              sub="Age 13+"
+              sub={live ? `Age 13+ · ${perRoom.maxAdults} per room` : 'Age 13+'}
               noun="adults"
               value={adults}
               min={1}
@@ -462,7 +478,7 @@ export default function StayReview({navigation, route}) {
             />
             <Stepper
               title="Children"
-              sub="Age 2–12"
+              sub={live && perRoom.maxChildren ? `Age 2–12 · ${perRoom.maxChildren} per room` : 'Age 2–12'}
               noun="children"
               value={kids}
               min={0}
@@ -475,7 +491,9 @@ export default function StayReview({navigation, route}) {
           <Stage t={t} i={3} style={[styles.card, styles.price]}>
             <Text style={styles.cap}>{hold.busy ? 'PRICE BREAKDOWN · UPDATING…' : 'PRICE BREAKDOWN'}</Text>
             <View style={styles.prow}>
-              <Text style={styles.prowK}>{`₹${live ? money(hs.rate) : inr(review.price)} × ${nightsLabel}`}</Text>
+              <Text style={styles.prowK}>
+                {`₹${live ? money(hs.rate) : inr(review.price)} × ${rooms > 1 ? `${rooms} rooms × ` : ''}${nightsLabel}`}
+              </Text>
               <Text style={styles.prowV}>{`₹${live ? money(hs.roomTotal) : inr(room)}`}</Text>
             </View>
             {live && hs.extras > 0 ? (
