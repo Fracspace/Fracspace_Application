@@ -11,7 +11,7 @@ import Svg, {Circle, Defs, Ellipse, Path, RadialGradient, Rect, Stop} from 'reac
 import {colors, fonts} from '../theme';
 import {E, PressScale, Reveal, kf, useLoop} from '../anim';
 import {useColor, useShot, useTo} from './bits';
-import {HOME, places} from './data';
+import {HOME} from './data';
 import {h2} from './Suites';
 import {useRenderCount} from '../perf';
 
@@ -56,11 +56,10 @@ function routeTable(p, n = 48) {
   return {len, xs, ys};
 }
 
-const ROUTES = Object.fromEntries(places.map(p => [p.id, {d: routeD(p), ...routeTable(p)}]));
+const routesFor = places => Object.fromEntries(places.map(p => [p.id, {d: routeD(p), ...routeTable(p)}]));
 
 /** `.route` / `.route.on`: dash draw 1s --out, opacity .3s, peach glow. */
-function Route({id, on}) {
-  const r = ROUTES[id];
+function Route({r, on}) {
   const draw = useTo(on ? 1 : 0, 1000, E.out);
   const op = useTo(on ? 1 : 0, 300);
   const props = useAnimatedProps(() => ({strokeDashoffset: r.len * (1 - draw.value), opacity: op.value}));
@@ -74,8 +73,8 @@ function Route({id, on}) {
 }
 
 /** `.car`: `drive` 2.8s ease-in-out, .9s delay, along the current route. */
-function Car({place}) {
-  const {xs, ys} = ROUTES[place];
+function Car({route}) {
+  const {xs, ys} = route;
   const p = useLoop(2800, {delay: 900});
   const a = useAnimatedStyle(() => {
     const f = E.easeInOut(p.value) * (xs.length - 1);
@@ -146,14 +145,18 @@ function Pin({p, on, onPick}) {
 }
 
 /** `.info` card, re-entering with infoA/infoB (.55s spring) on every pick. */
-function Info({place, n}) {
+function Info({place, n, city}) {
   const p = useShot(n + 1, 550);
   const a = useAnimatedStyle(() => {
     const t = E.spring(p.value);
     return {opacity: Math.min(1, t), transform: [{translateY: 14 * (1 - t)}, {scale: 0.97 + 0.03 * t}]};
   });
   const directions = () =>
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name}, Hyderabad`)}`);
+    Linking.openURL(
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        place.lat != null ? `${place.lat},${place.lng}` : `${place.name}, ${city}`,
+      )}`,
+    ).catch(() => {});
   return (
     <Animated.View style={[styles.info, a]}>
       <Image source={place.img} resizeMode="cover" style={styles.infoImg} />
@@ -211,7 +214,9 @@ function MapBackdrop({w}) {
 
 function Nearby({stay}) {
   useRenderCount('Nearby');
-  const [place, setPlace] = useState('kbr');
+  const places = stay.places;
+  const routes = useMemo(() => routesFor(places), [places]);
+  const [place, setPlace] = useState(places[0].id);
   const [n, setN] = useState(0);
   const [w, setW] = useState(MAP_W);
   const pick = id => () => {
@@ -220,7 +225,7 @@ function Nearby({stay}) {
       setN(x => x + 1);
     }
   };
-  const cur = useMemo(() => places.find(p => p.id === place), [place]);
+  const cur = useMemo(() => places.find(p => p.id === place) || places[0], [places, place]);
   const ox = (w - MAP_W) / 2;
   const from = stay.address.split(',')[0];
 
@@ -244,13 +249,13 @@ function Nearby({stay}) {
             <Path d="M260 -10C246 120 284 210 262 330" stroke="rgba(255,255,255,.06)" strokeWidth={8} />
             <Path d="M-10 270C90 260 200 300 360 250M180 -10C190 80 170 200 200 330M-10 30C100 50 240 20 360 40" stroke="rgba(255,255,255,.04)" strokeWidth={3} />
             {places.map(p => (
-              <Path key={p.id} d={ROUTES[p.id].d} stroke="rgba(241,221,186,.18)" strokeWidth={2} strokeDasharray="3 5" />
+              <Path key={p.id} d={routes[p.id].d} stroke="rgba(241,221,186,.18)" strokeWidth={2} strokeDasharray="3 5" />
             ))}
             {places.map(p => (
-              <Route key={p.id} id={p.id} on={p.id === place} />
+              <Route key={p.id} r={routes[p.id]} on={p.id === cur.id} />
             ))}
           </Svg>
-          <Car place={place} />
+          <Car route={routes[cur.id]} />
           <View pointerEvents="none" style={[styles.home, {left: HOME[0], top: HOME[1]}]}>
             <HomeRing delay={0} />
             <HomeRing delay={1200} />
@@ -271,7 +276,7 @@ function Nearby({stay}) {
           </View>
           <Text style={styles.northText}>Stylised · not to scale</Text>
         </View>
-        <Info place={cur} n={n} />
+        <Info place={cur} n={n} city={stay.city} />
       </Reveal>
       <View style={styles.chips}>
         {places.map(p => (

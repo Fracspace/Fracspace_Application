@@ -203,9 +203,11 @@ function RetreatCard({r, i, sx, vw, liked, onLike, onOpen}) {
       <PressScale to={1} onPress={onOpen} accessibilityLabel={`Open ${r.name}`} style={styles.rcardPress}>
         <View style={styles.rimg}>
           <Image source={r.img} style={styles.fill} resizeMode="cover" />
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>{r.tag}</Text>
-          </View>
+          {r.tag ? (
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>{r.tag}</Text>
+            </View>
+          ) : null}
           <View style={styles.idots}>
             <View style={[styles.idot, styles.idotOn]} />
             <View style={styles.idot} />
@@ -214,10 +216,12 @@ function RetreatCard({r, i, sx, vw, liked, onLike, onOpen}) {
         </View>
         <View style={styles.rrow}>
           <Text style={styles.rname}>{r.name}</Text>
-          <View style={styles.rate}>
-            <StarIcon />
-            <Text style={styles.rateText}>{r.rate}</Text>
-          </View>
+          {r.rate ? (
+            <View style={styles.rate}>
+              <StarIcon />
+              <Text style={styles.rateText}>{r.rate}</Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.rloc}>{r.loc}</Text>
         <Text style={styles.price}>

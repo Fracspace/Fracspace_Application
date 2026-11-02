@@ -4,6 +4,7 @@ import {request, USE_MOCK} from './client';
 import {useQuery} from './useQuery';
 import {images} from '../data';
 import * as mock from '../Stays/data';
+import * as sd from '../StayDetail/data';
 
 const P = '/stays';
 
@@ -195,3 +196,190 @@ export const useStayBookings = tab =>
     // Not kept on disk: bookings belong to whoever is signed in.
     {mock: USE_MOCK.stays ? MOCK_TABS[tab] : undefined, persist: false},
   );
+
+// ---- Stay Detail
+export const getProperty = (idOrSlug, params) => request('GET', `${P}/properties/${idOrSlug}`, {params});
+
+// The four amenities the bento draws (animated icons), matched by key or label.
+const BENTO = [
+  ['ac', /\b(ac|a\/c|air[- ]?condition)/i],
+  ['wifi', /wi-?fi/i],
+  ['minibar', /mini[- ]?bar/i],
+  ['housekeeping', /house[- ]?keeping/i],
+];
+const BENTO_LABEL = {ac: 'Air Conditioner', wifi: 'Wi-Fi', minibar: 'Mini Bar', housekeeping: 'House Keeping Service'};
+
+function splitAmenities(list) {
+  const bento = {};
+  const more = [];
+  const seen = new Set();
+  (list || []).forEach(a => {
+    const label = (a.label || '').trim();
+    const hit = BENTO.find(([k, re]) => a.key === k || re.test(label));
+    if (hit) {
+      bento[hit[0]] = BENTO_LABEL[hit[0]];
+    } else if (label && !seen.has(label.toLowerCase())) {
+      seen.add(label.toLowerCase());
+      more.push({label, icon: a.icon ? {uri: a.icon} : null});
+    }
+  });
+  return {bento, more, count: Object.keys(bento).length + more.length};
+}
+
+const R = 6371;
+function kmBetween(a, b) {
+  const rad = x => (x * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const km = n => `${n < 10 ? Math.round(n * 10) / 10 : Math.round(n)} km`;
+
+/**
+ * Nearby places placed on the stylised 350×320 map around the stay at HOME,
+ * by their real bearing and (scaled) distance. Places without coordinates,
+ * or a stay without them, can't be placed and are left out. Keeps the 3 nearest.
+ */
+const HOME_XY = [205, 160];
+function toPlaces(stay, list) {
+  const c = stay.coordinates;
+  if (!c || c.lat == null || c.lng == null) {
+    return [];
+  }
+  const ok = (list || [])
+    .filter(p => p.lat != null && p.lng != null)
+    .map(p => ({p, d: p.distanceKm ?? kmBetween(c, p)}))
+    .filter(x => x.d < 80) // anything further is bad data
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 3);
+  if (!ok.length) {
+    return [];
+  }
+  const cos = Math.cos((c.lat * Math.PI) / 180);
+  const vec = p => [(p.lng - c.lng) * cos, -(p.lat - c.lat)];
+  const far = Math.max(...ok.map(x => Math.hypot(...vec(x.p)))) || 1;
+  const [hx, hy] = HOME_XY;
+  return ok.map(({p, d}) => {
+    const [vx, vy] = vec(p);
+    const len = Math.hypot(vx, vy) || 1;
+    // 70–150px from the stay, keeping the real direction; clamped inside the map.
+    const r = 70 + (80 * len) / far;
+    const x = Math.round(Math.min(325, Math.max(25, hx + (vx / len) * r)));
+    const y = Math.round(Math.min(290, Math.max(50, hy + (vy / len) * r)));
+    const nx = -(y - hy) * 0.18;
+    const ny = (x - hx) * 0.18;
+    const dist = km(d);
+    return {
+      id: p.id,
+      name: p.name,
+      short: dist,
+      dist: p.driveMinutes ? `${dist} · ${p.driveMinutes}m` : dist,
+      x,
+      y,
+      c: [hx + (x - hx) * 0.35 + nx, hy + (y - hy) * 0.35 + ny, hx + (x - hx) * 0.7 + nx, hy + (y - hy) * 0.7 + ny].map(Math.round),
+      img: pic(p.image, images.hero),
+      lat: p.lat,
+      lng: p.lng,
+    };
+  });
+}
+
+function toPolicy(p) {
+  const cx = p.policies?.cancellation || {};
+  const rules = (cx.rules || []).slice().sort((a, b) => b.minHoursBeforeCheckIn - a.minHoursBeforeCheckIn);
+  const free = rules.find(r => r.refundPercent === 100 && r.minHoursBeforeCheckIn > 0);
+  return {
+    text: cx.text || '',
+    summary: cx.summary || '',
+    rules,
+    freeHours: free ? free.minHoursBeforeCheckIn : null,
+    title: free ? 'Free cancellation' : rules[0]?.label || 'Cancellation policy',
+    sub: free ? `Up to ${free.minHoursBeforeCheckIn} hrs before check-in` : cx.text || '',
+  };
+}
+
+export function toStay(p) {
+  const taxPct = p.tax?.inclusive ? 0 : Number(p.tax?.percent) || 0;
+  const gallery = (p.gallery || []).filter(g => g.url).map(g => ({img: {uri: g.url}, alt: g.alt || p.name}));
+  return {
+    id: p.id,
+    slug: p.slug,
+    name: p.name || '',
+    short: p.name || '',
+    rate: rate1(p.rating),
+    address: p.location || p.address || '',
+    city: p.city || cityOf(p.location),
+    about: p.description || p.tagline || '',
+    gallery: gallery.length ? gallery : [{img: pic(p.image, images.balcony), alt: p.name}],
+    tour: p.videoTour?.url
+      ? {url: p.videoTour.url, thumb: p.videoTour.thumbnail, dur: mmss(p.videoTour.durationSec || 0), secs: p.videoTour.durationSec || 0}
+      : null,
+    suites: (p.roomTypes || []).map((r, i) => ({
+      id: r.id,
+      name: r.name || '',
+      spec:
+        r.spec ||
+        [r.sizeSqft ? `${r.sizeSqft} sq ft` : '', r.bedType || ''].filter(Boolean).join(' · ') ||
+        (r.amenities || []).slice(0, 3).map(a => a.label).join(' · '),
+      price: r.averageNightlyRate ?? r.baseRate ?? 0,
+      img: pic(r.images?.[0]?.url, fb(i)),
+      badge: r.badge || '',
+      soldOut: !!r.soldOut,
+      maxAdults: r.maxAdults || 2,
+      maxChildren: r.maxChildren ?? 0,
+    })),
+    amenities: splitAmenities(p.amenities),
+    checkIn: p.checkInLabel || '',
+    checkOut: p.checkOutLabel || '',
+    policy: toPolicy(p),
+    taxPct,
+    taxLabel: p.tax?.label || 'Taxes & fees',
+    bookingRules: p.bookingRules || null,
+    places: toPlaces(p, p.nearbyPlaces),
+    phone: p.contact?.phone || null,
+  };
+}
+
+/** Nightly total incl. taxes for a suite of this stay. */
+export const stayTotal = (stay, suite) => Math.round(suite.price * (1 + stay.taxPct / 100));
+
+const mockStays = new Map();
+function mockStay(id) {
+  if (!mockStays.has(id)) {
+    const s = sd.stayFor(id);
+    mockStays.set(id, {
+      ...s,
+      id,
+      slug: id,
+      city: s.address.split(', ').pop(),
+      gallery: sd.gallery,
+      tour: {url: null, dur: '0:45', secs: 45},
+      suites: sd.suites,
+      amenities: {bento: {...BENTO_LABEL}, more: [], count: 4},
+      checkIn: '2:00 PM',
+      checkOut: '11:00 AM',
+      policy: toPolicy({
+        policies: {
+          cancellation: {
+            rules: [
+              {label: 'Free cancellation', minHoursBeforeCheckIn: 72, refundPercent: 100},
+              {label: 'No refund', minHoursBeforeCheckIn: 0, refundPercent: 0},
+            ],
+          },
+        },
+      }),
+      taxPct: 5,
+      taxLabel: 'Taxes & fees',
+      bookingRules: null,
+      places: sd.places,
+      phone: null,
+    });
+  }
+  return mockStays.get(id);
+}
+
+export const useStayDetail = idOrSlug =>
+  useQuery('stays:property:' + idOrSlug, () => getProperty(idOrSlug).then(toStay), {
+    mock: USE_MOCK.stays ? mockStay(idOrSlug) : undefined,
+  });

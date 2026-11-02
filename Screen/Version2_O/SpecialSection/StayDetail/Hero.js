@@ -1,7 +1,8 @@
 // `.hero`: photo gallery with Ken Burns, scroll parallax, video-tour ring,
 // odometer counter and dots (StayDetail.dc.html).
 import React, {memo, useEffect, useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import Video from 'react-native-video';
 import Animated, {
   interpolateColor,
   useAnimatedProps,
@@ -16,7 +17,6 @@ import {colors, fonts} from '../theme';
 import {E, PressScale, ViewportGate, useLoop, useReducedMotion} from '../anim';
 import {BackIcon, GlassButton} from '../HubBits';
 import {Odo, ShareIcon, useTo} from './bits';
-import {gallery} from './data';
 import {useRenderCount} from '../perf';
 
 export const HERO_H = 420;
@@ -95,11 +95,33 @@ function TourRing() {
   );
 }
 
-const COUNT = gallery.map((g, i) => String(i + 1));
+const COUNTS = Array.from({length: 60}, (_, i) => String(i + 1));
 
-function Hero({scrollY, top, onBack, onShare}) {
+/** Full-screen video tour, opened from the "Video Tour" pill. */
+function TourPlayer({tour, onClose}) {
+  return (
+    <Modal visible animationType="fade" supportedOrientations={['portrait', 'landscape']} onRequestClose={onClose}>
+      <View style={styles.player}>
+        <Video
+          source={{uri: tour.url}}
+          poster={tour.thumb || undefined}
+          style={StyleSheet.absoluteFill}
+          resizeMode="contain"
+          controls
+          onEnd={onClose}
+        />
+        <GlassButton label="Close video tour" onPress={onClose} style={styles.playerClose}>
+          <BackIcon />
+        </GlassButton>
+      </View>
+    </Modal>
+  );
+}
+
+function Hero({gallery, tour, scrollY, top, onBack, onShare}) {
   useRenderCount('Hero');
   const [img, setImg] = useState(0);
+  const [playing, setPlaying] = useState(false);
   const n = gallery.length;
   // `.gal` parallax: scroll 0→420px → translateY 170, scale 1.06, brightness .55.
   const par = useAnimatedStyle(() => {
@@ -148,17 +170,28 @@ function Hero({scrollY, top, onBack, onShare}) {
       </View>
 
       <View style={styles.foot}>
-        <PressScale to={0.92} duration={400} accessibilityRole="button" accessibilityLabel="Play video tour, 45 seconds" style={styles.gpill}>
-          <ViewportGate>
-            <TourRing />
-          </ViewportGate>
-          <Text style={styles.gpillText}>Video Tour (0:45)</Text>
-        </PressScale>
+        {tour ? (
+          <PressScale
+            to={0.92}
+            duration={400}
+            onPress={() => tour.url && setPlaying(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Play video tour, ${tour.secs} seconds`}
+            style={styles.gpill}>
+            <ViewportGate>
+              <TourRing />
+            </ViewportGate>
+            <Text style={styles.gpillText}>Video Tour ({tour.dur})</Text>
+          </PressScale>
+        ) : (
+          <View />
+        )}
         <View style={[styles.gpill, styles.count]}>
-          <Odo index={img} h={16} items={COUNT} duration={600} textStyle={styles.countText} />
+          <Odo index={img} h={16} items={COUNTS.slice(0, n)} duration={600} textStyle={styles.countText} />
           <Text style={styles.countText}>{' '}/ {n}</Text>
         </View>
       </View>
+      {playing ? <TourPlayer tour={tour} onClose={() => setPlaying(false)} /> : null}
     </View>
   );
 }
@@ -166,6 +199,8 @@ function Hero({scrollY, top, onBack, onShare}) {
 export default memo(Hero);
 
 const styles = StyleSheet.create({
+  player: {flex: 1, backgroundColor: '#000'},
+  playerClose: {position: 'absolute', top: 54, left: 16},
   hero: {height: HERO_H, overflow: 'hidden', backgroundColor: '#000'},
   photo: {width: '100%', height: '100%'},
   dim: {backgroundColor: '#000'},

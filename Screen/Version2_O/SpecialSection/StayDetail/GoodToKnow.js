@@ -104,7 +104,7 @@ function ReadPolicy({onPress}) {
   );
 }
 
-function GoodToKnow({onOpenPolicy}) {
+function GoodToKnow({checkIn, checkOut, policy, onOpenPolicy}) {
   useRenderCount('GoodToKnow');
   return (
     <View style={styles.sec}>
@@ -116,13 +116,13 @@ function GoodToKnow({onOpenPolicy}) {
         <View style={styles.tcol}>
           <Sun />
           <Text style={styles.tlabel}>CHECK-IN</Text>
-          <Text style={styles.tval}>2:00 PM</Text>
+          <Text style={styles.tval}>{checkIn}</Text>
         </View>
         <TravelLine />
         <View style={[styles.tcol, styles.tcolEnd]}>
           <Moon />
           <Text style={styles.tlabel}>CHECK-OUT</Text>
-          <Text style={[styles.tval, styles.right]}>11:00 AM</Text>
+          <Text style={[styles.tval, styles.right]}>{checkOut}</Text>
         </View>
       </Reveal>
 
@@ -131,11 +131,11 @@ function GoodToKnow({onOpenPolicy}) {
           <Shield />
           <View style={styles.pcopy}>
             <Text style={styles.tlabel}>CANCELLATION</Text>
-            <Text style={styles.ptitle}>Free cancellation</Text>
-            <Text style={styles.psub}>Up to 72 hrs before check-in</Text>
+            <Text style={styles.ptitle}>{policy.title}</Text>
+            {policy.sub ? <Text style={styles.psub}>{policy.sub}</Text> : null}
           </View>
         </View>
-        <ReadPolicy onPress={onOpenPolicy} />
+        {policy.rules.length ? <ReadPolicy onPress={onOpenPolicy} /> : null}
       </Reveal>
     </View>
   );

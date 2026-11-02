@@ -3,7 +3,7 @@
 // Loops that only fade or move a shape run on a view around its own small
 // drawing, so Android doesn't redraw the whole icon every frame.
 import React, {memo, useState} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Image, StyleSheet, Text, View} from 'react-native';
 import Animated, {useAnimatedProps, useAnimatedStyle} from 'react-native-reanimated';
 import Svg, {Circle, Defs, G, Path, RadialGradient, Rect, Stop} from 'react-native-svg';
 import {colors, fonts} from '../theme';
@@ -219,32 +219,67 @@ function Tile({id, label, style, row, children, after}) {
   );
 }
 
-function Amenities() {
+/** Amenities without an animated icon: a quiet pill each, under the bento. */
+function More({items}) {
+  return (
+    <Reveal style={styles.more}>
+      {items.map(a => (
+        <View key={a.label} style={styles.mpill}>
+          {a.icon ? (
+            <Image source={a.icon} style={styles.micon} resizeMode="contain" />
+          ) : (
+            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={PEACH} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="m5 12.5 4.5 4.5L19 7.5" />
+            </Svg>
+          )}
+          <Text style={styles.mtext}>{a.label}</Text>
+        </View>
+      ))}
+    </Reveal>
+  );
+}
+
+function Amenities({amenities}) {
   useRenderCount('Amenities');
+  const {bento: b, more, count} = amenities;
+  const right = b.wifi || b.minibar;
   return (
     <View>
       <Reveal style={styles.head}>
         <Text style={h2}>Luxury Amenities</Text>
-        <Text style={styles.sub}>4 included</Text>
+        <Text style={styles.sub}>{count} included</Text>
       </Reveal>
       <Reveal style={styles.bento}>
-        <View style={styles.cols}>
-          <Tile id="ac" label="Air Conditioner" style={styles.flex}>
-            <AcIcon />
-          </Tile>
-          <View style={[styles.flex, styles.stack]}>
-            <Tile id="wifi" label="Wi-Fi">
-              <WifiIcon />
-            </Tile>
-            <Tile id="bar" label="Mini Bar">
-              <BarIcon />
-            </Tile>
+        {b.ac || right ? (
+          <View style={styles.cols}>
+            {b.ac ? (
+              <Tile id="ac" label={b.ac} style={styles.flex}>
+                <AcIcon />
+              </Tile>
+            ) : null}
+            {right ? (
+              <View style={[styles.flex, styles.stack]}>
+                {b.wifi ? (
+                  <Tile id="wifi" label={b.wifi}>
+                    <WifiIcon />
+                  </Tile>
+                ) : null}
+                {b.minibar ? (
+                  <Tile id="bar" label={b.minibar}>
+                    <BarIcon />
+                  </Tile>
+                ) : null}
+              </View>
+            ) : null}
           </View>
-        </View>
-        <Tile id="hk" row label="House Keeping Service" after={<Bell />}>
-          <HkIcon />
-        </Tile>
+        ) : null}
+        {b.housekeeping ? (
+          <Tile id="hk" row label={b.housekeeping} after={<Bell />}>
+            <HkIcon />
+          </Tile>
+        ) : null}
       </Reveal>
+      {more.length ? <More items={more} /> : null}
     </View>
   );
 }
@@ -260,6 +295,20 @@ const styles = StyleSheet.create({
   hkBox: {width: 86, height: 64},
   sub: {fontFamily: fonts.regular, fontSize: 12, color: colors.muted},
   bento: {gap: 10},
+  more: {flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10},
+  mpill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  micon: {width: 16, height: 16, tintColor: PEACH},
+  mtext: {fontFamily: fonts.regular, fontSize: 12.5, color: colors.soft},
   cols: {flexDirection: 'row', gap: 10},
   flex: {flex: 1},
   stack: {gap: 10},

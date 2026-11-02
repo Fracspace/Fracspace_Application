@@ -17,7 +17,7 @@ import {E, LoopGate, Reveal, RevealScope, ViewportGate, cssAngle, useLinger} fro
 import {BackIcon, GlassButton, Grain} from '../HubBits';
 import {StarIcon} from '../Stays/icons';
 import {CheckIcon, ShareIcon, useLazy, useTo} from './bits';
-import Hero from './Hero';
+import Hero, {HERO_H} from './Hero';
 import Suites from './Suites';
 import Amenities from './Amenities';
 import GoodToKnow from './GoodToKnow';
@@ -25,7 +25,9 @@ import Nearby from './Nearby';
 import BookingBar from './BookingBar';
 import PolicySheet from './PolicySheet';
 import {markTap, useFirstFrame, useJsFps, useRenderCount} from '../perf';
-import {booking, inr, stayFor, suites, totalFor} from './data';
+import {booking, inr} from './data';
+import {stayTotal, useStayDetail} from '../api/stays';
+import {ErrorCard, Skeleton} from '../api/ui';
 
 const CARD = cssAngle(160);
 const clamp01 = v => {
@@ -104,36 +106,49 @@ const Page = memo(function Page({scrollY, contentRef, height, stage, stay, suite
     <RevealScope scrollY={scrollY} contentRef={contentRef} viewportH={height}>
       <Animated.ScrollView onScroll={onScroll} scrollEventThrottle={16} showsVerticalScrollIndicator={false}>
         <View ref={contentRef} collapsable={false}>
-          <Hero scrollY={scrollY} top={top} onBack={onBack} onShare={onShare} />
+          <Hero gallery={stay.gallery} tour={stay.tour} scrollY={scrollY} top={top} onBack={onBack} onShare={onShare} />
           <View style={[styles.body, {paddingBottom: 150 + barBottom - 14}]}>
             <Reveal style={styles.titleBlock}>
               <Text style={styles.h1}>{stay.name}</Text>
               <View style={styles.rateRow}>
-                <StarIcon size={15} color="#F1A23B" />
-                <Text style={styles.rate}>{stay.rate}</Text>
+                {stay.rate ? (
+                  <>
+                    <StarIcon size={15} color="#F1A23B" />
+                    <Text style={styles.rate}>{stay.rate}</Text>
+                  </>
+                ) : null}
                 <Text style={styles.addr}>{stay.address}</Text>
               </View>
             </Reveal>
-            <Reveal style={styles.cardWrap}>
-              <LinearGradient colors={['#17161A', '#111114']} start={CARD.start} end={CARD.end} style={styles.card}>
-                <Text style={styles.aboutTitle}>About the {stay.short}</Text>
-                <Text style={styles.about}>{stay.about}</Text>
-              </LinearGradient>
-            </Reveal>
-            <ViewportGate>
-              <Suites suite={suite} onPick={onPickSuite} />
-            </ViewportGate>
-            {stage >= 1 ? (
+            {stay.about ? (
+              <Reveal style={styles.cardWrap}>
+                <LinearGradient colors={['#17161A', '#111114']} start={CARD.start} end={CARD.end} style={styles.card}>
+                  <Text style={styles.aboutTitle}>About the {stay.short}</Text>
+                  <Text style={styles.about}>{stay.about}</Text>
+                </LinearGradient>
+              </Reveal>
+            ) : null}
+            {stay.suites.length ? (
               <ViewportGate>
-                <Amenities />
+                <Suites suites={stay.suites} suite={suite} onPick={onPickSuite} />
+              </ViewportGate>
+            ) : null}
+            {stage >= 1 && stay.amenities.count ? (
+              <ViewportGate>
+                <Amenities amenities={stay.amenities} />
               </ViewportGate>
             ) : null}
             {stage >= 2 ? (
               <ViewportGate>
-                <GoodToKnow onOpenPolicy={onOpenPolicy} />
+                <GoodToKnow
+                  checkIn={stay.checkIn}
+                  checkOut={stay.checkOut}
+                  policy={stay.policy}
+                  onOpenPolicy={onOpenPolicy}
+                />
               </ViewportGate>
             ) : null}
-            {stage >= 3 ? (
+            {stage >= 3 && stay.places.length ? (
               <ViewportGate>
                 <Nearby stay={stay} />
               </ViewportGate>
@@ -164,7 +179,8 @@ function useStage() {
 
 export default function StayDetail({navigation, route}) {
   const stayId = route?.params?.stayId;
-  const stay = useMemo(() => stayFor(stayId), [stayId]);
+  const q = useStayDetail(stayId);
+  const stay = q.data;
   const {height} = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
@@ -172,7 +188,7 @@ export default function StayDetail({navigation, route}) {
   useFirstFrame('StayDetail');
   useJsFps('StayDetail', isFocused);
 
-  const [suite, setSuite] = useState('lux');
+  const [suitePick, setSuite] = useState(null);
   const [phase, setPhase] = useState('idle');
   const [sheet, setSheet] = useState(false);
   const [policy, setPolicy] = useState(false);
@@ -187,8 +203,13 @@ export default function StayDetail({navigation, route}) {
   const contentRef = useRef(null);
   const scrollY = useSharedValue(0);
 
-  const cur = suites.find(s => s.id === suite);
-  const total = totalFor(cur);
+  // The guest's pick, else the suite the stay highlights, else the first.
+  const cur = useMemo(() => {
+    const list = stay?.suites || [];
+    return list.find(s => s.id === suitePick) || list.find(s => s.badge) || list[0] || null;
+  }, [stay, suitePick]);
+  const suite = cur?.id;
+  const total = cur ? stayTotal(stay, cur) : 0;
   const totalLabel = inr(total);
 
   const back = useCallback(
@@ -230,10 +251,22 @@ export default function StayDetail({navigation, route}) {
         total,
         dates: booking.dates,
         guests: booking.guests,
+        // For Review Booking's API step: the property and room as loaded here.
+        propertyId: stay.id,
+        stay: {name: stay.name, short: stay.short, rate: stay.rate, address: stay.address, taxPct: stay.taxPct},
+        suite: {id: cur.id, name: cur.name, spec: cur.spec, price: cur.price, img: cur.img, maxAdults: cur.maxAdults, maxChildren: cur.maxChildren},
       });
     },
-    [navigation, stayId, cur, total],
+    [navigation, stayId, stay, cur, total],
   );
+
+  // A stay that no longer exists (404) goes back to the listing.
+  const gone = q.error?.status === 404;
+  useEffect(() => {
+    if (gone) {
+      back();
+    }
+  }, [gone, back]);
 
   // Android back closes the policy, then the sheet, before leaving the screen.
   // Only while focused: the sheet stays open under Review Booking.
@@ -254,6 +287,28 @@ export default function StayDetail({navigation, route}) {
 
   const top = Math.max(20, insets.top + 8);
   const barBottom = Math.max(14, insets.bottom - 18);
+
+  if (!stay) {
+    return (
+      <View style={styles.page}>
+        {q.error ? (
+          <ErrorCard message={q.error.message} onRetry={q.refresh} style={{marginTop: top + 64}} />
+        ) : (
+          <>
+            <Skeleton style={styles.skHero} />
+            <View style={styles.body}>
+              <Skeleton style={styles.skTitle} />
+              <Skeleton style={styles.skCard} />
+              <Skeleton style={styles.skCard} />
+            </View>
+          </>
+        )}
+        <GlassButton label="Back to stays" onPress={back} style={[styles.skBack, {top}]}>
+          <BackIcon />
+        </GlassButton>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.page}>
@@ -276,24 +331,33 @@ export default function StayDetail({navigation, route}) {
           scrollY={scrollY}
           inset={insets.top}
           stay={stay}
-          suiteName={cur.name}
+          suiteName={cur?.name || ''}
           totalLabel={totalLabel}
           onBack={back}
           onShare={share}
         />
-        <BookingBar
-          bottom={barBottom}
-          phase={phase}
-          sheet={sheet}
-          suiteName={cur.name}
-          stayShort={stay.short}
-          totalLabel={totalLabel}
-          onReserve={reserve}
-          onCloseSheet={closeSheet}
-          onPay={pay}
-        />
+        {cur ? (
+          <BookingBar
+            bottom={barBottom}
+            phase={phase}
+            sheet={sheet}
+            suiteName={cur.name}
+            stayShort={stay.short}
+            totalLabel={totalLabel}
+            onReserve={reserve}
+            onCloseSheet={closeSheet}
+            onPay={pay}
+          />
+        ) : null}
         {policyMounted ? (
-          <PolicySheet open={policyShown} onClose={closePolicy} stayName={stay.name} insets={insets} />
+          <PolicySheet
+            open={policyShown}
+            onClose={closePolicy}
+            stayName={stay.name}
+            checkIn={stay.checkIn}
+            policy={stay.policy}
+            insets={insets}
+          />
         ) : null}
         <Toast ref={toast} top={top + 56} />
         <Grain opacity={0.07} />
@@ -305,6 +369,10 @@ export default function StayDetail({navigation, route}) {
 const styles = StyleSheet.create({
   page: {flex: 1, backgroundColor: colors.ground},
   body: {paddingTop: 22, paddingHorizontal: 20, backgroundColor: colors.ground},
+  skHero: {height: HERO_H, borderRadius: 0},
+  skTitle: {height: 56, marginBottom: 20},
+  skCard: {height: 150, marginBottom: 14},
+  skBack: {position: 'absolute', left: 20},
   titleBlock: {gap: 8},
   h1: {fontFamily: fonts.bold, fontSize: 22, letterSpacing: ls(-0.01, 22), color: '#fff'},
   rateRow: {flexDirection: 'row', alignItems: 'center', gap: 8},

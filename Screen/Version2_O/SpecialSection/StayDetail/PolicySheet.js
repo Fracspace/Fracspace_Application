@@ -42,7 +42,30 @@ function Rule({open, i, tint, bg, title, titleSize = 15, body, style, children})
   );
 }
 
-function PolicySheet({open, onClose, stayName, insets}) {
+const GREEN = '#4ADE80';
+const RED = '#F87171';
+const tint = pct => (pct >= 100 ? GREEN : pct <= 0 ? RED : colors.gold);
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** One line per refund rule; `prev` is the rule with the next longer notice. */
+function ruleText(r, prev) {
+  const h = r.minHoursBeforeCheckIn;
+  const pct = r.refundPercent;
+  if (h > 0) {
+    return pct >= 100
+      ? `Cancel up to ${h} hours before check-in and get a full refund.`
+      : `Cancel at least ${h} hours before check-in and get ${pct}% back.`;
+  }
+  const within = prev ? ` within ${prev.minHoursBeforeCheckIn} hours of check-in` : '';
+  return pct <= 0 ? `Cancellations made${within} are not refunded.` : `Cancellations made${within} get ${pct}% back.`;
+}
+
+function PolicySheet({open, onClose, stayName, checkIn, policy, insets}) {
+  const {rules, freeHours: free} = policy;
+  const example =
+    free && free % 24 === 0 && checkIn
+      ? `Check-in Saturday at ${checkIn} → cancel free until ${DAYS[(((6 - free / 24) % 7) + 7) % 7]} at ${checkIn}.`
+      : '';
   useRenderCount('PolicySheet');
   const {height} = useWindowDimensions();
   const v = useTo(open ? 1 : 0, 600, SLIDE);
@@ -68,52 +91,63 @@ function PolicySheet({open, onClose, stayName, insets}) {
         <Row open={open} i={1} style={styles.tl}>
           <Text style={styles.tlTitle}>Your cancellation window</Text>
           <View style={styles.tlBar}>
-            <Seg open={open} delay={300} flex={3} color="#4ADE80" />
-            <Seg open={open} delay={600} flex={1} color="#F87171" />
+            {free ? (
+              <>
+                <Seg open={open} delay={300} flex={3} color={GREEN} />
+                <Seg open={open} delay={600} flex={1} color={RED} />
+              </>
+            ) : (
+              <Seg open={open} delay={300} flex={1} color={tint(rules[0]?.refundPercent ?? 0)} />
+            )}
           </View>
           <View style={styles.ticks}>
             <Text style={[styles.tick, styles.tickL]}>Booking</Text>
             <View style={styles.tickMid}>
-              <Text style={[styles.tick, styles.tickOn]}>72h before</Text>
+              {free ? <Text style={[styles.tick, styles.tickOn]}>{free}h before</Text> : null}
             </View>
             <Text style={[styles.tick, styles.tickR]}>Check-in</Text>
           </View>
         </Row>
 
-        <Rule
-          open={open}
-          i={2}
-          tint="#4ADE80"
-          bg="rgba(74,222,128,0.12)"
-          title="Free cancellation"
-          body="Cancel up to 72 hours before check-in and get a full refund.">
-          {c => <CheckIcon size={20} color={c} strokeWidth={2.2} />}
-        </Rule>
-        <Rule
-          open={open}
-          i={3}
-          tint="#F87171"
-          bg="rgba(248,113,113,0.12)"
-          title="No refund after that"
-          body="Cancellations made within 72 hours of check-in are not refunded.">
-          {c => <CloseIcon size={20} color={c} strokeWidth={2.2} />}
-        </Rule>
-        <Rule
-          open={open}
-          i={4}
-          tint={colors.gold}
-          bg="rgba(241,221,186,0.1)"
-          title="Example"
-          titleSize={13}
-          style={styles.example}
-          body="Check-in Saturday at [2:00 PM] → cancel free until Wednesday at [2:00 PM].">
-          {c => (
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round">
-              <Rect x="4" y="5.5" width="16" height="14.5" rx="2.5" />
-              <Path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
-            </Svg>
-          )}
-        </Rule>
+        {rules.map((r, i) => {
+          const c = tint(r.refundPercent);
+          return (
+            <Rule
+              key={i}
+              open={open}
+              i={2 + i}
+              tint={c}
+              bg={c === GREEN ? 'rgba(74,222,128,0.12)' : c === RED ? 'rgba(248,113,113,0.12)' : 'rgba(241,221,186,0.1)'}
+              title={r.label}
+              body={ruleText(r, rules[i - 1])}>
+              {k =>
+                r.refundPercent > 0 ? (
+                  <CheckIcon size={20} color={k} strokeWidth={2.2} />
+                ) : (
+                  <CloseIcon size={20} color={k} strokeWidth={2.2} />
+                )
+              }
+            </Rule>
+          );
+        })}
+        {example ? (
+          <Rule
+            open={open}
+            i={2 + rules.length}
+            tint={colors.gold}
+            bg="rgba(241,221,186,0.1)"
+            title="Example"
+            titleSize={13}
+            style={styles.example}
+            body={example}>
+            {c => (
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round">
+                <Rect x="4" y="5.5" width="16" height="14.5" rx="2.5" />
+                <Path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
+              </Svg>
+            )}
+          </Rule>
+        ) : null}
       </ScrollView>
       <PressScale
         to={0.96}

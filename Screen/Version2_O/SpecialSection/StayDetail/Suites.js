@@ -11,7 +11,7 @@ import Svg, {Path} from 'react-native-svg';
 import {colors, fonts, ls, type} from '../theme';
 import {E, Reveal, kf, usePressScale} from '../anim';
 import {CHECK_D, FocusRing, Sweep, useShot, useTo} from './bits';
-import {inr, suites} from './data';
+import {inr} from './data';
 import {useRenderCount} from '../perf';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -99,7 +99,7 @@ function Suite({s, sel, onPick}) {
   );
 }
 
-function Suites({suite, onPick}) {
+function Suites({suites, suite, onPick}) {
   return (
     <View>
       <Reveal style={styles.head}>
@@ -107,7 +107,7 @@ function Suites({suite, onPick}) {
           <Text style={styles.h2}>Available Suites</Text>
           <Text style={styles.sub}>Select a suite configuration for this stay</Text>
         </View>
-        <Text style={styles.count}>{suites.length} Options</Text>
+        <Text style={styles.count}>{suites.length === 1 ? '1 Option' : `${suites.length} Options`}</Text>
       </Reveal>
       <View style={styles.list} accessibilityRole="radiogroup" accessibilityLabel="Suite options">
         {suites.map(s => (
