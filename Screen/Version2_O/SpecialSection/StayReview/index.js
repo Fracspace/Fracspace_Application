@@ -19,7 +19,7 @@ import Calendar from './Calendar';
 import Confirming, {CONFIRM_MS} from './Confirming';
 import Success from './Success';
 import {useFirstFrame, useJsFps, useRenderCount} from '../perf';
-import {money, toReceipt} from '../api/stays';
+import {day, money, toReceipt} from '../api/stays';
 import {clock, useHold} from './useHold';
 import {
   CHECK_IN,
@@ -151,7 +151,11 @@ export default function StayReview({navigation, route}) {
   const params = route?.params;
   const review = useMemo(() => reviewFor(params), [params]);
   const today = useMemo(todayDate, []);
-  const first = useMemo(defaultDates, []);
+  // Mock mode: the search's dates and guests when Stays passed them.
+  const first = useMemo(
+    () => (params?.trip ? {cin: day(params.trip.checkIn), cout: day(params.trip.checkOut)} : defaultDates()),
+    [params],
+  );
 
   // Live: the hold from Stay Detail's Reserve; the server prices every change.
   const hold = useHold(params?.booking || null);
@@ -161,8 +165,8 @@ export default function StayReview({navigation, route}) {
   const maxKids = review.maxKids ?? MAX_KIDS;
   const [cin, setCin] = useState(hs ? hs.cin : first.cin);
   const [cout, setCout] = useState(hs ? hs.cout : first.cout);
-  const [adults, setAdults] = useState(hs ? hs.adults : review.adults);
-  const [kids, setKids] = useState(hs ? hs.children : 0);
+  const [adults, setAdults] = useState(hs ? hs.adults : Math.min(maxAdults, params?.trip?.adults || review.adults));
+  const [kids, setKids] = useState(hs ? hs.children : Math.min(maxKids, params?.trip?.children || 0));
   const [notice, setNotice] = useState(null);
   const [code, setCode] = useState(hs?.offerCode || '');
   const [flip, setFlip] = useState(0);

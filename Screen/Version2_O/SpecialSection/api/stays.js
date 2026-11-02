@@ -404,14 +404,19 @@ function mockStay(id) {
   return mockStays.get(id);
 }
 
-export const useStayDetail = idOrSlug =>
-  useQuery('stays:property:' + idOrSlug, () => getProperty(idOrSlug).then(toStay), {
-    mock: USE_MOCK.stays ? mockStay(idOrSlug) : undefined,
-  });
+/** `trip` (from the search) prices the suites for those dates. */
+export const useStayDetail = (idOrSlug, trip) =>
+  useQuery(
+    `stays:property:${idOrSlug}${trip ? `:${trip.checkIn}:${trip.checkOut}` : ''}`,
+    () => getProperty(idOrSlug, trip ? {checkIn: trip.checkIn, checkOut: trip.checkOut} : undefined).then(toStay),
+    {
+      mock: USE_MOCK.stays ? mockStay(idOrSlug) : undefined,
+    },
+  );
 
 // ---- Booking: hold → review (PATCH) → pay / release
 const opId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** POST /holds for one room. `cin` / `cout` are local Dates. */
 export const createHold = ({propertyId, roomTypeId, cin, cout, adults = 1, children = 0, couponCode}) =>

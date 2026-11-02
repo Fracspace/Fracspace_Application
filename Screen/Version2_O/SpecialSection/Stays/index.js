@@ -18,7 +18,7 @@ import {SearchIcon, TicketIcon} from './icons';
 import Explore, {SearchBar} from './Explore';
 import Bookings from './Bookings';
 import SearchSheet, {initialSearch} from './SearchSheet';
-import {useStaysHome} from '../api/stays';
+import {useStaysHome, ymd} from '../api/stays';
 import {ErrorCard} from '../api/ui';
 
 /** `.stg` header children: `rise .8s --out`, delays .05s / .15s. */
@@ -106,10 +106,17 @@ export default function Stays({navigation}) {
   });
 
   const back = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Hub'));
+  // The applied search (dates + guests) goes with the stay, through to the
+  // hold and Review Booking. Read from a ref so openStay keeps its identity.
+  const searchRef = useRef(search);
+  searchRef.current = search;
   const openStay = useCallback(
     stayId => {
       markTap('StayDetail');
-      navigation.navigate('StayDetail', {stayId});
+      const s = searchRef.current;
+      const dated = s.applied && s.mode === 'dates' && s.in && s.out && s.out > s.in;
+      const trip = dated ? {checkIn: ymd(s.in), checkOut: ymd(s.out), adults: Math.max(1, s.g.a), children: s.g.c} : undefined;
+      navigation.navigate('StayDetail', {stayId, trip});
     },
     [navigation],
   );

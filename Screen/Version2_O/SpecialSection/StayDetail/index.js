@@ -104,6 +104,10 @@ const Toast = forwardRef(function Toast({top}, ref) {
 
 /** The scrolling page; memoised so the Reserve bar and sheets don't re-render it. */
 const ABOUT_LINES = 4;
+const guests = b => {
+  const n = (b.adults || 1) + (b.children || 0);
+  return `${n} guest${n > 1 ? 's' : ''}`;
+};
 
 /**
  * The description, cut to ABOUT_LINES with "Read more". A hidden full copy
@@ -221,7 +225,8 @@ function useStage() {
 
 export default function StayDetail({navigation, route}) {
   const stayId = route?.params?.stayId;
-  const q = useStayDetail(stayId);
+  const trip = route?.params?.trip; // {checkIn, checkOut, adults, children} from the search
+  const q = useStayDetail(stayId, trip);
   const stay = q.data;
   const {height} = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -316,9 +321,12 @@ export default function StayDetail({navigation, route}) {
       return;
     }
     try {
-      const {cin, cout} = defaultDates();
+      const {cin, cout} = trip ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : defaultDates();
+      // The search's guests, within what this suite takes.
+      const adults = Math.min(cur.maxAdults || 1, trip?.adults || 1);
+      const children = Math.min(cur.maxChildren || 0, trip?.children || 0);
       const couponCode = await AsyncStorage.getItem('ss:coupon').catch(() => null);
-      const res = await createHold({propertyId: stay.id, roomTypeId: cur.id, cin, cout, adults: 1, couponCode});
+      const res = await createHold({propertyId: stay.id, roomTypeId: cur.id, cin, cout, adults, children, couponCode});
       setHeld(res.booking);
       setPhase('done');
       setSheet(true);
@@ -329,7 +337,7 @@ export default function StayDetail({navigation, route}) {
         q.refresh(); // sold out: reload the suites
       }
     }
-  }, [phase, stay, cur, q]);
+  }, [phase, stay, cur, q, trip]);
   const closeSheet = useCallback(() => setSheet(false), []);
   const openPolicy = useCallback(() => setPolicy(true), []);
   const closePolicy = useCallback(() => setPolicy(false), []);
@@ -350,12 +358,13 @@ export default function StayDetail({navigation, route}) {
         stay: {name: stay.name, short: stay.short, rate: stay.rate, address: stay.address, taxPct: stay.taxPct},
         suite: {id: cur.id, name: cur.name, spec: cur.spec, price: cur.price, img: cur.img, maxAdults: cur.maxAdults, maxChildren: cur.maxChildren},
         booking: held,
+        trip,
       });
     },
-    [navigation, stayId, stay, cur, total, held],
+    [navigation, stayId, stay, cur, total, held, trip],
   );
   const sheetSub = held
-    ? `${short(day(held.checkIn))} – ${short(day(held.checkOut))} · ${held.adults} guest${held.adults > 1 ? 's' : ''} · ₹${money(
+    ? `${short(day(held.checkIn))} – ${short(day(held.checkOut))} · ${guests(held)} · ₹${money(
         held.pricing?.total,
       )} incl. taxes`
     : `${booking.dates} · ${booking.guests} guest · ₹${totalLabel} incl. taxes`;
