@@ -98,7 +98,9 @@ function ReelVideo({uri, play, muted, onReady, onFail}) {
       repeat
       disableFocus
       playInBackground={false}
-      onReadyForDisplay={() => {
+      // onLoad, not onReadyForDisplay: Android doesn't draw a transparent
+      // player, so its first frame never arrives while it is hidden.
+      onLoad={() => {
         setShown(true);
         onReady();
       }}
@@ -234,7 +236,8 @@ export default function Reels({reels, onBook, onPos}) {
   return (
     <View style={styles.wrap}>
       <View style={styles.deck}>
-        {reels.map((v, i) => (
+        {/* The deck shows three cards (POS); the rest mount when they move up. */}
+        {reels.map((v, i) => (i - reel + n) % n < POS.length && (
           <DeckCard
             key={v.id}
             img={v.img}
