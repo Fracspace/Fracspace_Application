@@ -22,7 +22,7 @@
       android:usesCleartextTraffic="true"
       android:requestLegacyExternalStorage="true"
       android:theme="@style/AppTheme"
-      tools:replace="android:allowBackup"
+      tools:replace="android:allowBackup,android:theme"
       android:enableOnBackInvokedCallback="false">
 
 

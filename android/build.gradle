@@ -25,4 +25,11 @@ buildscript {
     }
 }
 
+allprojects {
+    repositories {
+        // payu-non-seam-less-react pulls in PayU's PhonePe intent SDK, which is only published here.
+        maven { url "https://phonepe.mycloudrepo.io/public/repositories/phonepe-intentsdk-android" }
+    }
+}
+
 apply plugin: "com.facebook.react.rootproject"

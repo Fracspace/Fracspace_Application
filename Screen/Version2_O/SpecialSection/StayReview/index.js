@@ -19,7 +19,8 @@ import Calendar from './Calendar';
 import Confirming, {CONFIRM_MS} from './Confirming';
 import Success from './Success';
 import {useFirstFrame, useJsFps, useRenderCount} from '../perf';
-import {day, MAX_ROOMS, money, roomsFor, toReceipt} from '../api/stays';
+import {day, MAX_ROOMS, money, paymentResult, paymentStatus, roomsFor, toReceipt} from '../api/stays';
+import {openPayU} from './payu';
 import {errText} from '../api/client';
 import {clock, useHold} from './useHold';
 import {
@@ -41,6 +42,11 @@ import {
 } from './data';
 
 const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+const POLL_MS = 120000; // keep checking a pending payment for 2 minutes
+const wait = ms => new Promise(r => setTimeout(r, ms));
+// payment-result answers with `next`; payment-status may only carry the booking.
+const NEXT = {confirmed: 'confirmed', payment_failed: 'failed', expired: 'expired', cancelled: 'cancelled'};
+const nextOf = r => r?.next || NEXT[r?.booking?.status || r?.status] || 'pending';
 const COUNTS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const MUTED = '#ADA597';
 
@@ -351,25 +357,92 @@ export default function StayReview({navigation, route}) {
     }
   }, [pin, pout]);
 
+  // After the PayU checkout: `wait` = still confirming (a tap re-checks),
+  // `closed` = cancelled meanwhile (nothing left to pay).
+  const after = useRef(null);
+  const mounted = useRef(true);
+  useEffect(() => () => {
+    mounted.current = false;
+  }, []);
+  const paidOk = useCallback(b => {
+    setNotice(null);
+    setPaid(toReceipt(b));
+    setPhase('anim');
+    t2.current = setTimeout(() => setPhase('done'), CONFIRM_MS);
+  }, []);
+  // The server's word on the payment, polled while it is pending (UPI can be slow).
+  const outcome = useCallback(
+    async (start, event) => {
+      let r = start;
+      const until = Date.now() + POLL_MS;
+      while (nextOf(r) === 'pending' && Date.now() < until && mounted.current) {
+        setNotice('Confirming your payment…');
+        await wait(r.pollAfterMs || 3000);
+        r = await paymentStatus(hold.id).catch(() => r); // a network blip: keep waiting
+      }
+      if (!mounted.current) {
+        return;
+      }
+      const next = nextOf(r);
+      if (next === 'confirmed') {
+        hold.settle(true);
+        after.current = null;
+        paidOk(r.booking);
+        return;
+      }
+      setPhase('idle');
+      if (next === 'pending') {
+        hold.settle(true);
+        after.current = 'wait';
+        setNotice("We'll notify you once your payment is confirmed. Tap Proceed to pay to check again.");
+      } else if (next === 'expired') {
+        hold.expire();
+      } else if (next === 'cancelled') {
+        hold.settle(true);
+        after.current = 'closed';
+        setNotice('This booking was cancelled. Check My bookings for details.');
+      } else {
+        hold.settle(false);
+        setNotice(
+          event === 'onPaymentCancel'
+            ? 'Payment cancelled. Tap Proceed to pay to try again.'
+            : "Payment didn't go through. Tap Proceed to pay to try again.",
+        );
+      }
+    },
+    [hold, paidOk],
+  );
+
   const pay = useCallback(() => {
-    if (phase !== 'idle' || hold.expired || hold.busy) {
+    if (phase !== 'idle' || hold.expired || hold.busy || after.current === 'closed') {
       return;
     }
     setPhase('busy');
     if (live) {
       setNotice(null);
+      if (after.current === 'wait') {
+        paymentStatus(hold.id)
+          .then(r => outcome(r))
+          .catch(e => {
+            setPhase('idle');
+            setNotice(errText(e));
+          });
+        return;
+      }
       hold
         .pay(walletOn)
-        .then(res => {
-          if (res.requiresPayment) {
-            // PayU checkout is the next step; until then only wallet-covered stays complete.
-            setPhase('idle');
-            setNotice('Online payment (UPI / card) is being set up. Use your wallet balance if it covers the stay.');
+        .then(async res => {
+          if (!res.requiresPayment) {
+            paidOk(res.booking);
             return;
           }
-          setPaid(toReceipt(res.booking));
-          setPhase('anim');
-          t2.current = setTimeout(() => setPhase('done'), CONFIRM_MS);
+          const {attemptId} = res.payment;
+          const result = await openPayU(res.payment);
+          // Always reported, success or not; the server asks PayU itself.
+          const r = await paymentResult(hold.id, attemptId, result).catch(e =>
+            e.status === 410 ? {next: 'expired'} : {next: 'pending'},
+          );
+          await outcome(r, result.event);
         })
         .catch(e => {
           setPhase('idle');
@@ -385,7 +458,7 @@ export default function StayReview({navigation, route}) {
       setPhase('anim');
       t2.current = setTimeout(() => setPhase('done'), CONFIRM_MS);
     }, 1200);
-  }, [phase, live, hold, walletOn, patch]);
+  }, [phase, live, hold, walletOn, patch, paidOk, outcome]);
 
   // Android back: closes the calendar, waits out the payment, leaves success for Home.
   useEffect(() => {

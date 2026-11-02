@@ -10,7 +10,8 @@ export function useHold(booking) {
   const [expired, setExpired] = useState(false);
   const [left, setLeft] = useState(null); // whole seconds of the hold left
   const id = booking?.bookingId;
-  const done = useRef(false); // paid (or expired): nothing to release
+  const done = useRef(false); // paid, paying or expired: nothing to release
+  const paying = useRef(false); // checkout open: the server decides if the hold ran out
   const live = useRef(true);
   useEffect(
     () => () => {
@@ -68,7 +69,7 @@ export function useHold(booking) {
     const tick = () => {
       const s = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
       setLeft(s);
-      if (s === 0) {
+      if (s === 0 && !paying.current) {
         done.current = true;
         setExpired(true);
       }
@@ -83,7 +84,9 @@ export function useHold(booking) {
     async useWallet => {
       try {
         const res = await payBooking(id, useWallet);
-        if (!res.requiresPayment) {
+        if (res.requiresPayment) {
+          paying.current = true;
+        } else {
           done.current = true;
         }
         return res;
@@ -94,7 +97,23 @@ export function useHold(booking) {
     [id, fail],
   );
 
-  return {live: !!booking, state, busy, expired, left, patch, pay};
+  /**
+   * The checkout's outcome from the server: `keep` = the booking is paid or
+   * still confirming (never release it); otherwise the hold is back to normal.
+   */
+  const settle = useCallback(keep => {
+    paying.current = false;
+    if (keep) {
+      done.current = true;
+    }
+  }, []);
+  const expire = useCallback(() => {
+    paying.current = false;
+    done.current = true;
+    setExpired(true);
+  }, []);
+
+  return {live: !!booking, id, state, busy, expired, left, patch, pay, settle, expire};
 }
 
 /** 590 → "9:50" */

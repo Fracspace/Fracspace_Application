@@ -452,6 +452,12 @@ export const patchBooking = (id, {cin, cout, ...rest}) =>
 export const releaseBooking = id => request('POST', `${P}/bookings/${id}/release`);
 // Only PayU is integrated, so it is always asked for by name.
 export const payBooking = (id, useWallet) => request('POST', `${P}/bookings/${id}/pay`, {body: {gateway: 'payu', useWallet}});
+/** After the SDK closes (success, failure or cancel): the server checks with PayU. → {next, shouldPoll, pollAfterMs, booking} */
+export const paymentResult = (id, attemptId, payload) =>
+  request('POST', `${P}/bookings/${id}/payment-result`, {body: {attemptId, payload}, timeout: 30000});
+export const paymentStatus = id => request('GET', `${P}/bookings/${id}/payment-status`);
+/** Signs a hash the PayU SDK asks for mid-checkout. → {hash} */
+export const payuHash = body => request('POST', `${P}/payments/payu/hash`, {body});
 
 /** Money with paise only when there are any: 6298.95 → "6,298.95", 5999 → "5,999". */
 export function money(n) {
