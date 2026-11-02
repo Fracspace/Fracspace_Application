@@ -298,6 +298,10 @@ export default function StayReview({navigation, route}) {
     [patch],
   );
 
+  // Leaving Review without paying (back button, gesture) frees the room at once.
+  const {release} = hold;
+  useEffect(() => navigation.addListener('beforeRemove', release), [navigation, release]);
+
   // The hold ran out: say so, then go back to Stay Detail to reserve again.
   useEffect(() => {
     if (!hold.expired) {

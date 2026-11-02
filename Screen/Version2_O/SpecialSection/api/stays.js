@@ -428,9 +428,19 @@ export function roomsFor(adults, children, suite) {
   return Math.min(MAX_ROOMS, Math.max(1, a, c));
 }
 
-/** POST /holds. `cin` / `cout` are local Dates. */
-export const createHold = ({propertyId, roomTypeId, cin, cout, rooms = 1, adults = 1, children = 0, couponCode}) =>
-  request('POST', `${P}/holds`, {
+// Releases still in flight: a new hold waits for them, so backing out of
+// Review and reserving again never races the room it just gave back.
+const releasing = new Set();
+export function releaseBooking(id) {
+  const p = request('POST', `${P}/bookings/${id}/release`).finally(() => releasing.delete(p));
+  releasing.add(p);
+  return p;
+}
+
+/** POST /holds. `cin` / `cout` are local Dates. Waits for any release still in flight. */
+export const createHold = async ({propertyId, roomTypeId, cin, cout, rooms = 1, adults = 1, children = 0, couponCode}) => {
+  await Promise.all([...releasing].map(r => r.catch(() => {})));
+  return request('POST', `${P}/holds`, {
     body: {
       propertyId,
       roomTypeId,
@@ -443,13 +453,13 @@ export const createHold = ({propertyId, roomTypeId, cin, cout, rooms = 1, adults
       idempotencyKey: opId(),
     },
   });
+};
 
 /** PATCH a held booking; dates as local Dates. Returns {booking, quote}. */
 export const patchBooking = (id, {cin, cout, ...rest}) =>
   request('PATCH', `${P}/bookings/${id}`, {
     body: {...(cin ? {checkIn: ymd(cin)} : null), ...(cout ? {checkOut: ymd(cout)} : null), ...rest},
   });
-export const releaseBooking = id => request('POST', `${P}/bookings/${id}/release`);
 // Only PayU is integrated, so it is always asked for by name.
 export const payBooking = (id, useWallet) => request('POST', `${P}/bookings/${id}/pay`, {body: {gateway: 'payu', useWallet}});
 /** After the SDK closes (success, failure or cancel): the server checks with PayU. → {next, shouldPoll, pollAfterMs, booking} */

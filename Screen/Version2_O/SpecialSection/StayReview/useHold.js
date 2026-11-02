@@ -10,17 +10,23 @@ export function useHold(booking) {
   const [expired, setExpired] = useState(false);
   const [left, setLeft] = useState(null); // whole seconds of the hold left
   const id = booking?.bookingId;
-  const done = useRef(false); // paid, paying or expired: nothing to release
+  const done = useRef(false); // paid, confirming, released or expired: nothing to release
   const paying = useRef(false); // checkout open: the server decides if the hold ran out
   const live = useRef(true);
+  /** Leaving without paying: give the room back now (once). */
+  const release = useCallback(() => {
+    // Never mid-checkout: the payment may still go through.
+    if (id && !done.current && !paying.current) {
+      done.current = true;
+      releaseBooking(id).catch(() => {});
+    }
+  }, [id]);
   useEffect(
     () => () => {
       live.current = false;
-      if (id && !done.current) {
-        releaseBooking(id).catch(() => {});
-      }
+      release();
     },
-    [id],
+    [release],
   );
 
   const fail = useCallback(e => {
@@ -113,7 +119,7 @@ export function useHold(booking) {
     setExpired(true);
   }, []);
 
-  return {live: !!booking, id, state, busy, expired, left, patch, pay, settle, expire};
+  return {live: !!booking, id, state, busy, expired, left, patch, pay, settle, expire, release};
 }
 
 /** 590 → "9:50" */
