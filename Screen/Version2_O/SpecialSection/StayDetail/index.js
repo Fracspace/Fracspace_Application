@@ -97,6 +97,42 @@ const Toast = forwardRef(function Toast({top}, ref) {
 });
 
 /** The scrolling page; memoised so the Reserve bar and sheets don't re-render it. */
+const ABOUT_LINES = 4;
+
+/**
+ * The description, cut to ABOUT_LINES with "Read more". A hidden full copy
+ * counts the lines, so the toggle shows only when the text is longer.
+ */
+function About({text}) {
+  const [lines, setLines] = useState(0);
+  const [open, setOpen] = useState(false);
+  const long = lines > ABOUT_LINES;
+  return (
+    <View>
+      <Text
+        style={[styles.about, styles.measure]}
+        onTextLayout={e => setLines(e.nativeEvent.lines.length)}
+        accessible={false}
+        importantForAccessibility="no">
+        {text}
+      </Text>
+      <Text style={styles.about} numberOfLines={open ? undefined : ABOUT_LINES}>
+        {text}
+      </Text>
+      {long ? (
+        <Text
+          style={styles.more}
+          onPress={() => setOpen(o => !o)}
+          suppressHighlighting
+          accessibilityRole="button"
+          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+          {open ? 'Show less' : 'Read more'}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 const Page = memo(function Page({scrollY, contentRef, height, stage, stay, suite, top, barBottom, onBack, onShare, onPickSuite, onOpenPolicy}) {
   useRenderCount('Page');
   const onScroll = useAnimatedScrollHandler(e => {
@@ -124,7 +160,7 @@ const Page = memo(function Page({scrollY, contentRef, height, stage, stay, suite
               <Reveal style={styles.cardWrap}>
                 <LinearGradient colors={['#17161A', '#111114']} start={CARD.start} end={CARD.end} style={styles.card}>
                   <Text style={styles.aboutTitle}>About the {stay.short}</Text>
-                  <Text style={styles.about}>{stay.about}</Text>
+                  <About text={stay.about} />
                 </LinearGradient>
               </Reveal>
             ) : null}
@@ -382,6 +418,8 @@ const styles = StyleSheet.create({
   card: {padding: 18, borderRadius: 24, borderWidth: 1, borderColor: colors.borderStrong},
   aboutTitle: {fontFamily: fonts.bold, fontSize: 17, color: '#fff', marginBottom: 8},
   about: {fontFamily: fonts.regular, fontSize: 13, lineHeight: 13 * 1.65, color: colors.soft},
+  measure: {position: 'absolute', left: 0, right: 0, opacity: 0},
+  more: {alignSelf: 'flex-start', marginTop: 8, fontFamily: fonts.bold, fontSize: 13, color: colors.gold},
   mh: {
     position: 'absolute',
     top: 0,
