@@ -237,52 +237,77 @@ function kmBetween(a, b) {
 const km = n => `${n < 10 ? Math.round(n * 10) / 10 : Math.round(n)} km`;
 
 /**
- * Nearby places placed on the stylised 350×320 map around the stay at HOME,
- * by their real bearing and (scaled) distance. Places without coordinates,
- * or a stay without them, can't be placed and are left out. Keeps the 3 nearest.
+ * Nearby places on the stylised 350×320 map around the stay at HOME. Each pin
+ * keeps its real bearing from the stay, its distance sets how far out it sits,
+ * and pins are fanned apart so none overlap. If the stay's own coordinates
+ * don't agree with the places' distances (bad data), bearings can't be trusted
+ * and the pins are spread evenly instead. Keeps the 3 nearest.
  */
 const HOME_XY = [205, 160];
+const MIN_GAP = (55 * Math.PI) / 180;
 function toPlaces(stay, list) {
   const c = stay.coordinates;
-  if (!c || c.lat == null || c.lng == null) {
-    return [];
-  }
+  const hasC = c && c.lat != null && c.lng != null;
   const ok = (list || [])
     .filter(p => p.lat != null && p.lng != null)
-    .map(p => ({p, d: p.distanceKm ?? kmBetween(c, p)}))
-    .filter(x => x.d < 80) // anything further is bad data
+    .map(p => {
+      const real = hasC ? kmBetween(c, p) : null;
+      return {p, real, d: p.distanceKm ?? real};
+    })
+    .filter(x => x.d != null && x.d < 80)
     .sort((a, b) => a.d - b.d)
     .slice(0, 3);
   if (!ok.length) {
     return [];
   }
-  const cos = Math.cos((c.lat * Math.PI) / 180);
-  const vec = p => [(p.lng - c.lng) * cos, -(p.lat - c.lat)];
-  const far = Math.max(...ok.map(x => Math.hypot(...vec(x.p)))) || 1;
+  // Trust bearings only if the stay's coordinates match the stated distances.
+  const trusted = hasC && ok.every(x => x.p.distanceKm == null || Math.abs(x.real - x.p.distanceKm) < Math.max(5, x.p.distanceKm));
+  const cos = hasC ? Math.cos((c.lat * Math.PI) / 180) : 1;
+  const far = Math.max(...ok.map(x => x.d)) || 1;
+  const pins = ok.map((x, i) => ({
+    ...x,
+    a: trusted
+      ? Math.atan2(-(x.p.lat - c.lat), (x.p.lng - c.lng) * cos)
+      : -Math.PI / 2 + (i * 2 * Math.PI) / ok.length - Math.PI / 6,
+    r: 70 + (80 * x.d) / far,
+  }));
+  // Fan pins apart so none sit on top of another.
+  pins.sort((a, b) => a.a - b.a);
+  for (let pass = 0; pass < 4; pass++) {
+    for (let i = 0; i < pins.length; i++) {
+      const next = pins[(i + 1) % pins.length];
+      const gap = i === pins.length - 1 ? next.a + 2 * Math.PI - pins[i].a : next.a - pins[i].a;
+      if (pins.length > 1 && gap < MIN_GAP) {
+        const push = (MIN_GAP - gap) / 2;
+        pins[i].a -= push;
+        next.a += push;
+      }
+    }
+  }
   const [hx, hy] = HOME_XY;
-  return ok.map(({p, d}) => {
-    const [vx, vy] = vec(p);
-    const len = Math.hypot(vx, vy) || 1;
-    // 70–150px from the stay, keeping the real direction; clamped inside the map.
-    const r = 70 + (80 * len) / far;
-    const x = Math.round(Math.min(325, Math.max(25, hx + (vx / len) * r)));
-    const y = Math.round(Math.min(290, Math.max(50, hy + (vy / len) * r)));
-    const nx = -(y - hy) * 0.18;
-    const ny = (x - hx) * 0.18;
-    const dist = km(d);
-    return {
-      id: p.id,
-      name: p.name,
-      short: dist,
-      dist: p.driveMinutes ? `${dist} · ${p.driveMinutes}m` : dist,
-      x,
-      y,
-      c: [hx + (x - hx) * 0.35 + nx, hy + (y - hy) * 0.35 + ny, hx + (x - hx) * 0.7 + nx, hy + (y - hy) * 0.7 + ny].map(Math.round),
-      img: pic(p.image, images.hero),
-      lat: p.lat,
-      lng: p.lng,
-    };
-  });
+  return pins
+    .sort((a, b) => a.d - b.d)
+    .map(({p, d, a, r}) => {
+      const x = Math.round(Math.min(325, Math.max(25, hx + Math.cos(a) * r)));
+      const y = Math.round(Math.min(290, Math.max(50, hy + Math.sin(a) * r)));
+      const nx = -(y - hy) * 0.18;
+      const ny = (x - hx) * 0.18;
+      const dist = km(d);
+      return {
+        id: p.id,
+        name: p.name,
+        short: dist,
+        dist: p.driveMinutes ? `${dist} · ${p.driveMinutes}m` : dist,
+        x,
+        y,
+        c: [hx + (x - hx) * 0.35 + nx, hy + (y - hy) * 0.35 + ny, hx + (x - hx) * 0.7 + nx, hy + (y - hy) * 0.7 + ny].map(
+          Math.round,
+        ),
+        img: pic(p.image, images.hero),
+        lat: p.lat,
+        lng: p.lng,
+      };
+    });
 }
 
 function toPolicy(p) {
