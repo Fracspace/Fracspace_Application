@@ -636,19 +636,30 @@ export default function StayReview({navigation, route}) {
           ) : null}
 
           {live && hs.wallet?.available && hs.wallet.balance > 0 ? (
-            <Stage t={t} i={4} style={[styles.card, styles.wallet]}>
-              <View style={styles.walletCopy}>
-                <Text style={styles.walletT}>Pay from wallet</Text>
-                <Text style={styles.small12}>{`Balance ₹${money(hs.wallet.balance)}`}</Text>
-              </View>
-              <Switch
-                value={walletOn}
-                onValueChange={toggleWallet}
+            <Stage t={t} i={4} style={styles.card}>
+              {/* The whole card toggles: on iOS a UISwitch inside the scroll view
+                  misses quick taps (only drags flip it), so the switch only shows the state. */}
+              <Pressable
+                onPress={() => toggleWallet(!walletOn)}
                 disabled={hold.busy}
-                trackColor={{false: 'rgba(255,255,255,0.15)', true: colors.gold}}
-                thumbColor={walletOn ? colors.ink : '#E6E0D6'}
+                accessibilityRole="switch"
+                accessibilityState={{checked: walletOn, disabled: hold.busy}}
                 accessibilityLabel="Pay from wallet"
-              />
+                style={styles.wallet}>
+                <View style={styles.walletCopy}>
+                  <Text style={styles.walletT}>Pay from wallet</Text>
+                  <Text style={styles.small12}>{`Balance ₹${money(hs.wallet.balance)}`}</Text>
+                </View>
+                <View pointerEvents="none">
+                  <Switch
+                    value={walletOn}
+                    trackColor={{false: 'rgba(255,255,255,0.15)', true: colors.gold}}
+                    thumbColor={walletOn ? colors.ink : '#E6E0D6'}
+                    importantForAccessibility="no-hide-descendants"
+                    accessibilityElementsHidden
+                  />
+                </View>
+              </Pressable>
             </Stage>
           ) : null}
 

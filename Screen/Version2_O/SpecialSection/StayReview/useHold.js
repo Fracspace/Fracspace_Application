@@ -12,8 +12,11 @@ export function useHold(booking) {
   const id = booking?.bookingId;
   const done = useRef(false); // paid, confirming, released or expired: nothing to release
   const paying = useRef(false); // checkout open: the server decides if the hold ran out
-  const live = useRef(true);
-  /** Leaving without paying: give the room back now (once). */
+  /**
+   * Leaving without paying: give the room back now (once). Review calls it on
+   * `beforeRemove`, which fires however the screen is left; not on unmount, so
+   * a remount (hot reload) never frees a room the guest is still looking at.
+   */
   const release = useCallback(() => {
     // Never mid-checkout: the payment may still go through.
     if (id && !done.current && !paying.current) {
@@ -21,13 +24,6 @@ export function useHold(booking) {
       releaseBooking(id).catch(() => {});
     }
   }, [id]);
-  useEffect(
-    () => () => {
-      live.current = false;
-      release();
-    },
-    [release],
-  );
 
   const fail = useCallback(e => {
     if (e.status === 410) {
@@ -44,16 +40,12 @@ export function useHold(booking) {
       try {
         const res = await patchBooking(id, body);
         const next = toReviewState(res.booking, res.quote);
-        if (live.current) {
-          setState(next);
-        }
+        setState(next);
         return next;
       } catch (e) {
         return fail(e);
       } finally {
-        if (live.current) {
-          setBusy(false);
-        }
+        setBusy(false);
       }
     },
     [id, fail],
