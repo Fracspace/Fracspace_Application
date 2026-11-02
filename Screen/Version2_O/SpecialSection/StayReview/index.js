@@ -660,11 +660,15 @@ export default function StayReview({navigation, route}) {
           </Stage>
         </ScrollView>
 
-        <LinearGradient
-          pointerEvents="box-none"
-          colors={[colors.groundA(0), colors.ground]}
-          locations={[0, 0.32]}
-          style={[styles.dock, {paddingBottom: bottom}]}>
+        {/* The fade is a background layer: on iOS a padded LinearGradient lays its
+            children out with the padding twice, pushing the button off the edge. */}
+        <View pointerEvents="box-none" style={[styles.dock, {paddingBottom: bottom}]}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[colors.groundA(0), colors.ground]}
+            locations={[0, 0.32]}
+            style={StyleSheet.absoluteFill}
+          />
           <PressScale to={0.97} duration={450} onPress={pay} accessibilityRole="button" accessibilityState={{busy}} style={styles.pay}>
             {busy ? null : (
               <LoopGate active={!covered}>
@@ -681,7 +685,7 @@ export default function StayReview({navigation, route}) {
               {busy ? null : <GoIcon />}
             </View>
           </PressScale>
-        </LinearGradient>
+        </View>
 
         {calMounted ? (
           <Calendar
