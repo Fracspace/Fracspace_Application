@@ -46,7 +46,11 @@ export function openPayU(payment) {
             }
             if (!warned) {
               warned = true;
-              Alert.alert('Payment could not start', 'Please close the payment screen and try again.');
+              Alert.alert(
+                'Payment could not start',
+                'Please close the payment screen and try again.' +
+                  (__DEV__ ? `\n\n[dev] ${hashName}: ${err?.message || 'no hash'}` : ''),
+              );
             }
           });
       }),

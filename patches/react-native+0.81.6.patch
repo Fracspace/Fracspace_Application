@@ -1,0 +1,16 @@
+diff --git a/node_modules/react-native/ReactCommon/react/featureflags/ReactNativeFeatureFlagsOverridesOSSStable.h b/node_modules/react-native/ReactCommon/react/featureflags/ReactNativeFeatureFlagsOverridesOSSStable.h
+index f165dda..a53f6af 100644
+--- a/node_modules/react-native/ReactCommon/react/featureflags/ReactNativeFeatureFlagsOverridesOSSStable.h
++++ b/node_modules/react-native/ReactCommon/react/featureflags/ReactNativeFeatureFlagsOverridesOSSStable.h
+@@ -29,5 +29,11 @@ class ReactNativeFeatureFlagsOverridesOSSStable
+   bool useShadowNodeStateOnClone() override {
+     return true;
+   }
++  // Fracspace: on 120 Hz iPads a state update kept losing the commit race to
++  // Reanimated's per-frame commits until ShadowTree's 1024-attempt assert.
++  // This makes a commit take a lock after a few failed tries instead.
++  bool preventShadowTreeCommitExhaustion() override {
++    return true;
++  }
+ };
+ } // namespace facebook::react
