@@ -59,6 +59,13 @@
 		<string>paytm</string>
 		<string>credpay</string>
 		<string>whatsapp</string>
+		<string>axismobile</string>
+		<string>kmb</string>
+		<string>sbiyono</string>
+		<string>icici</string>
+		<string>myairtel</string>
+		<string>payzapp</string>
+		<string>navipay</string>
 	</array>
 	<key>LSMinimumSystemVersion</key>
 	<string>12.0.0</string>
@@ -138,7 +145,17 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 		<key>UISceneConfigurations</key>
-		<dict/>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>

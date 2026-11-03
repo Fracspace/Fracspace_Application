@@ -20,6 +20,9 @@
   // (which does pause other audio) only when a video actually plays with sound.
   [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryAmbient error:nil];
   self.initialProps = @{};
+  // iOS 27 refuses to launch an app built with its SDK that still makes its
+  // window here; SceneDelegate (below) makes it in the window scene instead.
+  self.automaticallyLoadReactNativeWindow = NO;
   return [super application:application didFinishLaunchingWithOptions:launchOptions];
 }
 
@@ -50,6 +53,66 @@
 {
   [[AppsFlyerAttribution shared] continueUserActivity:userActivity restorationHandler:restorationHandler];
   return [RCTLinkingManager application:application continueUserActivity:userActivity restorationHandler:restorationHandler];
+}
+
+@end
+
+// The window, and the deep links iOS sends to the scene instead of the app
+// delegate once the app uses scenes.
+@interface SceneDelegate : UIResponder <UIWindowSceneDelegate>
+@property (nonatomic, strong) UIWindow *window;
+@end
+
+@implementation SceneDelegate
+
+- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions
+{
+  AppDelegate *app = (AppDelegate *)UIApplication.sharedApplication.delegate;
+
+  // A link that cold-started the app goes in as launch options, where
+  // Linking.getInitialURL() reads it.
+  NSMutableDictionary *launchOptions = [NSMutableDictionary new];
+  UIOpenURLContext *urlContext = connectionOptions.URLContexts.anyObject;
+  if (urlContext) {
+    launchOptions[UIApplicationLaunchOptionsURLKey] = urlContext.URL;
+    [[AppsFlyerAttribution shared] handleOpenUrl:urlContext.URL options:@{}];
+  }
+  NSUserActivity *activity = connectionOptions.userActivities.anyObject;
+  if (activity) {
+    launchOptions[UIApplicationLaunchOptionsUserActivityDictionaryKey] = @{
+      UIApplicationLaunchOptionsUserActivityTypeKey : activity.activityType,
+      @"UIApplicationLaunchOptionsUserActivityKey" : activity,
+    };
+    [[AppsFlyerAttribution shared] continueUserActivity:activity restorationHandler:nil];
+  }
+
+  UIView *rootView = [app.rootViewFactory viewWithModuleName:app.moduleName
+                                           initialProperties:app.initialProps
+                                               launchOptions:launchOptions];
+  self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+  UIViewController *rootViewController = [app createRootViewController];
+  [app setRootView:rootView toRootViewController:rootViewController];
+  self.window.rootViewController = rootViewController;
+  app.window = self.window;
+  [self.window makeKeyAndVisible];
+}
+
+- (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts
+{
+  for (UIOpenURLContext *context in URLContexts) {
+    NSMutableDictionary *options = [NSMutableDictionary new];
+    if (context.options.sourceApplication) {
+      options[UIApplicationOpenURLOptionsSourceApplicationKey] = context.options.sourceApplication;
+    }
+    [[AppsFlyerAttribution shared] handleOpenUrl:context.URL options:options];
+    [RCTLinkingManager application:UIApplication.sharedApplication openURL:context.URL options:options];
+  }
+}
+
+- (void)scene:(UIScene *)scene continueUserActivity:(NSUserActivity *)userActivity
+{
+  [[AppsFlyerAttribution shared] continueUserActivity:userActivity restorationHandler:nil];
+  [RCTLinkingManager application:UIApplication.sharedApplication continueUserActivity:userActivity restorationHandler:^(NSArray *_) {}];
 }
 
 @end
