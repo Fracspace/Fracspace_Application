@@ -51,6 +51,8 @@ export const toRetreat = (r, i) => ({
   rate: rate1(r.rating),
   price: inr(r.fromPrice),
   tag: r.tag || '',
+  city: r.city || '',
+  featured: !!r.featured,
   img: pic(r.image, fb(i)),
   liked: !!r.liked,
 });

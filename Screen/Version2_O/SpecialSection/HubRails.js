@@ -1,6 +1,6 @@
 // Hub rails: Featured Stays (scroll-scrubbed cards, heart burst), Iva
 // Essentials (expanding steppers) and the floating cart bar.
-import React, {useEffect} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
 import Animated, {
   useAnimatedScrollHandler,
@@ -14,7 +14,8 @@ import {colors, fonts, ls, type} from './theme';
 import {E, LoopGate, Nudge, PressScale, Reveal, Sheen, kf, useLinger, useReducedMotion, useToggle} from './anim';
 import {useRenderCount} from './perf';
 import {ArrowIcon, Tag} from './HubBits';
-import {ivaProducts, stays} from './data';
+import {ivaProducts} from './data';
+import {likeProperty, useStaysHome} from './api/stays';
 
 const CARD_W = 288;
 const CARD_GAP = 14;
@@ -140,13 +141,37 @@ function StayCard({stay, index, scrollX, width, liked, onLike, onOpen}) {
   );
 }
 
-export const FeaturedStays = React.memo(function FeaturedStays({liked, onLike, onOpenStay, onViewAll}) {
+// Hub card from a /stays/home retreat: "Boutique Hotel" → tag or city,
+// "Banjara Hills" → the area before the city.
+const toCard = r => ({...r, sub: r.tag || r.city, loc: r.loc.split(',')[0].trim()});
+
+/**
+ * The stays marked featured in /stays/home (all of them if none are), from the
+ * same cache the Stays screen reads. Nothing until the first load lands.
+ */
+export const FeaturedStays = React.memo(function FeaturedStays({onOpenStay, onViewAll}) {
   useRenderCount('FeaturedStays');
   const {width} = useWindowDimensions();
+  const {data} = useStaysHome();
+  const stays = useMemo(() => {
+    const all = data?.enabled ? data.retreats : [];
+    const top = all.filter(r => r.featured);
+    return (top.length ? top : all).slice(0, 6).map(toCard);
+  }, [data]);
+  // Server's liked state until the guest taps; a failed like flips back.
+  const [mine, setMine] = useState({});
+  const onLike = s => {
+    const next = !(mine[s.id] ?? s.liked);
+    setMine(m => ({...m, [s.id]: next}));
+    likeProperty(s.propertyId || s.id, next).catch(() => setMine(m => ({...m, [s.id]: !next})));
+  };
   const scrollX = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler(e => {
     scrollX.value = e.contentOffset.x;
   });
+  if (!stays.length) {
+    return null;
+  }
   return (
     <View style={{paddingTop: 38}}>
       <SectionHead
@@ -171,8 +196,8 @@ export const FeaturedStays = React.memo(function FeaturedStays({liked, onLike, o
             index={i}
             width={width}
             scrollX={scrollX}
-            liked={!!liked[s.id]}
-            onLike={() => onLike(s.id)}
+            liked={mine[s.id] ?? s.liked}
+            onLike={() => onLike(s)}
             onOpen={() => onOpenStay(s)}
           />
         ))}

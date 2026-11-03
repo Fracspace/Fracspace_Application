@@ -78,7 +78,6 @@ export default function Hub({navigation}) {
   useJsFps('Hub', isFocused);
 
   const [slide, setSlide] = useState(0);
-  const [liked, setLiked] = useState({});
   const [qty, setQtyState] = useState({});
   const [jig, setJig] = useState(0);
 
@@ -134,7 +133,6 @@ export default function Hub({navigation}) {
       stays: () => go('Stays'),
       shop: () => go('IvaShop'),
       concerts: () => go('ConcertDetails'),
-      like: id => setLiked(l => ({...l, [id]: !l[id]})),
       openStay: stay => navigation.navigate('StayDetail', {stayId: stay.id}),
       home: () => navigation.navigate('HomeStack', {screen: 'HomePage'}),
       cta: s => go(s.to),
@@ -193,7 +191,7 @@ export default function Hub({navigation}) {
                       </ViewportGate>
                     </View>
                     <ViewportGate>
-                      <FeaturedStays liked={liked} onLike={act.like} onOpenStay={act.openStay} onViewAll={act.stays} />
+                      <FeaturedStays onOpenStay={act.openStay} onViewAll={act.stays} />
                     </ViewportGate>
                     <ViewportGate>
                       <IvaEssentials qty={qty} setQty={setQty} onOpenShop={act.shop} />
