@@ -2,7 +2,7 @@
 // sends everything the SDK needs in `payment.sdk` and signs the hashes; this
 // opens the checkout and resolves with what the SDK reported, for
 // POST /payment-result. It never decides whether the payment went through.
-import {NativeEventEmitter} from 'react-native';
+import {Alert, NativeEventEmitter} from 'react-native';
 import PayUBizSdk from 'payu-non-seam-less-react';
 import {payuHash} from '../api/stays';
 
@@ -23,15 +23,44 @@ export function openPayU(payment) {
       subs.forEach(s => s.remove());
       resolve(result);
     };
+    // An empty hash leaves the checkout on "processing", and the SDK can't be
+    // closed from here, so a hash that can't be signed gets an alert (shown
+    // over the checkout) asking the guest to close it; that ends as a cancel.
+    let warned = false;
     subs.push(
-      emitter.addListener('generateHash', ({hashName, hashString, postSalt}) => {
-        payuHash({attemptId: payment.attemptId, hashName, hashString, postSalt})
-          .then(r => PayUBizSdk.hashGenerated({[hashName]: r.hash}))
-          // An unsigned hash makes the SDK fail that step on its own.
-          .catch(() => PayUBizSdk.hashGenerated({[hashName]: ''}));
+      emitter.addListener('generateHash', e => {
+        const {hashName, hashString, hashType, postSalt} = e;
+        if (__DEV__) {
+          console.log('[payu] generateHash', hashName, `hashType=${hashType}`, `fields=${Object.keys(e)}`);
+        }
+        payuHash({attemptId: payment.attemptId, hashName, hashString, hashType, postSalt})
+          .then(r => {
+            if (!r?.hash) {
+              throw new Error('No hash in the response');
+            }
+            PayUBizSdk.hashGenerated({[hashName]: r.hash});
+          })
+          .catch(err => {
+            if (__DEV__) {
+              console.log('[payu] hash failed', hashName, err?.status, err?.message);
+            }
+            if (!warned) {
+              warned = true;
+              Alert.alert('Payment could not start', 'Please close the payment screen and try again.');
+            }
+          });
       }),
     );
-    ENDS.forEach(event => subs.push(emitter.addListener(event, e => finish({event, ...e}))));
+    ENDS.forEach(event =>
+      subs.push(
+        emitter.addListener(event, e => {
+          if (__DEV__) {
+            console.log('[payu] event', event, e?.errorMsg || '');
+          }
+          finish({event, ...e});
+        }),
+      ),
+    );
     try {
       PayUBizSdk.openCheckoutScreen({
         payUPaymentParams: {
