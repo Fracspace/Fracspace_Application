@@ -161,3 +161,30 @@ App bug found in the same run: `sbkg_jJU5mlThtZIt` (cancelled twice, then the ap
 its timeout, because the clean-up skipped any booking the server still called `pending_payment`. Fixed: a booking
 this phone saw end unpaid is released even if the server still says pending.
 
+### T3 · Wallet on, app killed inside PayU, reopened — 2026-11-04 12:35 IST, iOS simulator — ❌ S3 gap
+Booking `sbkg_d12M0Nn6Ne4f` (Hilltop), attempt `ST261104R2SR2QSR`:
+```
+12:35:32.158 POST /pay            → pending_payment wallet=95.98 debited holdUntil=12:50:32 IST
+             (app killed while PayU was open; nothing paid)
+12:35:54.835 reopened: clean-up   → GET booking: pending_payment
+12:35:55.506 POST /payment-result → next=pending → banner "Checking your payment"
+```
+**For the backend:** the app reports the attempt as soon as it reopens, but the server answers `pending`, so the room
+and the ₹95.98 wallet share stay locked until 12:50:32 (15 min). The app can't release it itself: it doesn't know
+whether the guest paid before the kill. Expected: the server asks PayU (`verify_payment` for the txnid) and fails the
+attempt (room + wallet freed) when PayU has no successful payment.
+Outcome: released by the server at 12:52:00 IST (wallet entry completed `07:22:00.588Z`, "Hold released"), ~90 s after
+`holdUntil`. Booking ended `payment_failed` with `payment.status=pending` (should be `expired` + failed/cancelled).
+The app only re-checks on launch / foreground, so a guest who stays in the app isn't told the wallet came back.
+
+### Retry gives a new attempt and extends the hold — 2026-11-04 12:45 IST, iOS simulator
+Booking `sbkg_0rmllvaaa5wV`, PayU opened, closed, opened again:
+```
+12:45:52.156 POST /pay → attempt ST2611043GGC6KAQ holdUntil 07:30:52Z   12:45:58.720 onPaymentCancel → next=pending
+12:46:09.378 POST /pay → attempt ST261104F5KWHT3E holdUntil 07:31:09Z   12:46:12.924 onPaymentCancel → next=pending
+```
+**For the backend:** the "pending so the guest can continue the same payment" design isn't what happens: the retry gets
+a new attempt (new txnid) and the first stays open. To resume, `/pay` should return the open attempt. Each `/pay` also
+moves `holdUntil` 15 min on, so opening and closing PayU can hold a room indefinitely; keep the first `holdUntil` or cap
+attempts per booking (429).
+

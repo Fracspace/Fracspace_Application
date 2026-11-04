@@ -99,7 +99,7 @@ const STAY_BOOKINGS = {
 };
 const STAY_NEWS = {
   confirmed: name => ['Booking confirmed', `Your payment for ${name} went through.`],
-  pending: name => ['Confirming your payment', `We're still confirming your payment for ${name}. We'll notify you.`],
+  pending: name => ['Checking your payment', `We're checking your payment for ${name}. If it didn't go through, the room and any wallet amount are freed automatically.`],
   failed: name => ['Payment didn\'t go through', `Your payment for ${name} didn't go through. Reserve again to book.`],
 };
 
