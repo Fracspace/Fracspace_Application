@@ -146,3 +146,18 @@ Re-check after the app fix, 12:18 IST, booking `sbkg_oYAuOxz7OFWh` — ✅ app s
 ```
 For the backend: after that release the booking still reports `payment.status=pending`; it should be cancelled/failed.
 
+### T2 · Wallet on, cancel in PayU, leave Review — 2026-11-04 12:29 IST, iOS simulator — ✅
+Booking `sbkg_HfwNN3k1DCyB` (Hilltop, ₹4,999), attempt `ST261104XX0SKKXP`:
+```
+12:29:10.680 POST /pay             → pending_payment wallet=95.98 debited
+12:29:18.752 PayU onPaymentCancel  → 12:29:18.827 /payment-result next=pending (app shows "cancelled" at once)
+12:29:26.310 back from Review      → POST /release → status=expired, wallet no longer debited
+Wallet history: one entry, "withdrawal 95.98 failed · Hold released - stay booking sbkg_HfwNN3k1DCyB"
+```
+Wallet share back 16 s after the cancel (was 15 min). W6 looks fixed: one entry per hold, and yesterday's
+`sbkg_h9qlOutVWVc7` withdrawal now reads `reversed`. Still from the server: `next=pending` after the cancel (S3).
+
+App bug found in the same run: `sbkg_jJU5mlThtZIt` (cancelled twice, then the app restarted) was left held until
+its timeout, because the clean-up skipped any booking the server still called `pending_payment`. Fixed: a booking
+this phone saw end unpaid is released even if the server still says pending.
+

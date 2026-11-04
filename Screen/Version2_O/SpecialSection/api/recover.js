@@ -46,8 +46,10 @@ async function settleOne(id, e) {
     forget(id); // expired / cancelled
     return null;
   }
-  if (b.status === 'pending_payment') {
+  if (b.status === 'pending_payment' && e.phase !== 'held') {
     // Paying from another device, or an attempt we never saw: leave it to the server.
+    // (`held` = this phone saw its checkout end unpaid, though the server may
+    // still say pending: released below like any other unused hold.)
     const r = await paymentStatus(id).catch(() => null);
     if (r?.booking && GONE.has(r.booking.status)) {
       forget(id);
