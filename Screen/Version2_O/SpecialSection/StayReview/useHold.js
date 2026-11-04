@@ -4,6 +4,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {patchBooking, payBooking, releaseBooking, toReviewState} from '../api/stays';
 import {serverNow} from '../api/client';
 import {forget, own, remember} from '../api/openBookings';
+import {arm} from '../api/recover';
 
 /** `booking` = the hold from Stay Detail's Reserve; null = mock mode. */
 export function useHold(booking) {
@@ -109,10 +110,12 @@ export function useHold(booking) {
    * else puts the hold back to normal.
    */
   const settle = useCallback(
-    next => {
+    (next, holdUntil) => {
       paying.current = false;
       if (next === 'pending') {
         done.current = true;
+        // Looked at again when the hold runs out, so the guest hears the outcome.
+        Promise.resolve(remember(id, {told: true, holdUntil})).then(arm);
       } else if (next === 'confirmed' || next === 'cancelled') {
         done.current = true;
         forget(id);

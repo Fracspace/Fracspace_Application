@@ -1,7 +1,9 @@
-// Settles what openBookings.js remembered, on launch and on every return to
-// the foreground: a hold no screen owns is released, and a payment the app
-// never reported is reported now (the server asks PayU).
+// Settles what openBookings.js remembered, on launch, on every return to the
+// foreground and when an open payment's hold runs out: a hold no screen owns
+// is released, and a payment the app never reported is reported now (the
+// server asks PayU).
 import {getBooking, paymentResult, paymentStatus, releaseBooking} from './stays';
+import {serverNow} from './client';
 import {forget, isOwned, readOpen, remember, settled} from './openBookings';
 
 // The booking is gone or finished on the server: nothing left to clean up.
@@ -20,6 +22,12 @@ async function settleOne(id, e) {
     return null; // offline / signed out: try again next time
   }
   const name = e.name || b?.property?.name || 'your stay';
+  // A payment this phone started ran out unpaid: say so, and what came back.
+  if (e.phase === 'paying' && (b?.status === 'expired' || b?.status === 'payment_failed')) {
+    await (b.status === 'payment_failed' ? releaseBooking(id).catch(() => {}) : forget(id));
+    const wallet = b.wallet && !b.wallet.debited ? b.wallet.amount || 0 : 0;
+    return {kind: 'failed', id, name, wallet};
+  }
   if (!b || GONE.has(b.status)) {
     forget(id);
     return e.phase === 'paying' && b?.status === 'confirmed' ? {kind: 'confirmed', id, name} : null;
@@ -33,11 +41,9 @@ async function settleOne(id, e) {
       return {kind: 'confirmed', id, name};
     }
     if (next === 'pending' || !next) {
-      if (e.told) {
-        return null;
-      }
-      remember(id, {told: true}); // say "still confirming" once, then wait quietly
-      return {kind: 'pending', id, name};
+      // Say "checking" once, then look again when the hold runs out.
+      remember(id, {told: true, holdUntil: r?.booking?.holdExpiresAt || b.holdExpiresAt});
+      return e.told ? null : {kind: 'pending', id, name};
     }
     if (next === 'failed') {
       await releaseBooking(id).catch(() => {});
@@ -65,7 +71,7 @@ let running = null;
 /**
  * Cleans up every booking no screen owns. Run on launch and when the app
  * comes back to the foreground. Resolves to news to show:
- * [{kind: 'confirmed' | 'pending' | 'failed', id, name}].
+ * [{kind: 'confirmed' | 'pending' | 'failed', id, name, wallet?}].
  */
 export function recoverOpenBookings() {
   if (!running) {
@@ -88,6 +94,7 @@ export function recoverOpenBookings() {
       return news;
     })().finally(() => {
       running = null;
+      arm();
     });
   }
   return running;
@@ -111,3 +118,38 @@ export async function pendingFor(propertyId) {
   }
   return {id: hit[0], name: hit[1].name, holdExpiresAt: b.holdExpiresAt ? Date.parse(b.holdExpiresAt) : null};
 }
+
+// The server frees an unpaid hold a little after `holdUntil` (its sweep).
+const SWEEP_MS = 120000;
+let timer = null;
+let listener = null;
+
+/** Arms one re-check for when the soonest open payment's hold has run out. */
+export async function arm() {
+  clearTimeout(timer);
+  if (!listener) {
+    return;
+  }
+  await settled(); // after this run's own forget / remember calls
+  const all = await readOpen();
+  const due = Object.values(all)
+    .filter(e => e.phase === 'paying' && e.holdUntil)
+    .map(e => Date.parse(e.holdUntil) + SWEEP_MS - serverNow());
+  if (due.length) {
+    if (__DEV__) {
+      console.log('[recover]', `next check in ${Math.round(Math.max(5000, Math.min(...due)) / 1000)}s`);
+    }
+    timer = setTimeout(() => recoverOpenBookings().then(n => listener?.(n)), Math.max(5000, Math.min(...due)));
+  }
+}
+
+/** While the app runs, `onNews` gets what the timed re-checks find. Returns a stop function. */
+export function watchOpenBookings(onNews) {
+  listener = onNews;
+  arm();
+  return () => {
+    listener = null;
+    clearTimeout(timer);
+  };
+}
+

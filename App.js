@@ -21,7 +21,7 @@ import NetInfo from '@react-native-community/netinfo';
 import NoInternet from './Screen/components/NoInternet';
 import { applyStatusBarForRoute } from './Screen/utils/statusBar';
 import { trackEvent, trackScreen } from './Screen/utils/analytics';
-import { recoverOpenBookings } from './Screen/Version2_O/SpecialSection/api/recover';
+import { recoverOpenBookings, watchOpenBookings } from './Screen/Version2_O/SpecialSection/api/recover';
 
 // OTA updates: Stallion on both platforms.
 import * as Stallion from 'react-native-stallion';
@@ -100,7 +100,12 @@ const STAY_BOOKINGS = {
 const STAY_NEWS = {
   confirmed: name => ['Booking confirmed', `Your payment for ${name} went through.`],
   pending: name => ['Checking your payment', `We're checking your payment for ${name}. If it didn't go through, the room and any wallet amount are freed automatically.`],
-  failed: name => ['Payment didn\'t go through', `Your payment for ${name} didn't go through. Reserve again to book.`],
+  failed: (name, wallet) => [
+    'Payment didn\'t go through',
+    wallet
+      ? `₹${wallet} is back in your wallet. Reserve ${name} again to book.`
+      : `The room at ${name} was released. Reserve again to book.`,
+  ],
 };
 
 const App = () => {
@@ -230,33 +235,35 @@ const App = () => {
   }, []);
 
   // Stays: holds and payments left open when the app was closed (killed in the
-  // PayU checkout, a release that failed offline) are settled after the splash
-  // and on every return to the foreground; the outcome shows as a banner.
+  // PayU checkout, a release that failed offline) are settled after the splash,
+  // on every return to the foreground and when an open payment's hold runs
+  // out; the outcome shows as a banner.
   useEffect(() => {
     if (showSplash) return;
-    const run = () =>
-      recoverOpenBookings()
-        .then(news =>
-          news.forEach(n => {
-            const [text1, text2] = STAY_NEWS[n.kind](n.name);
-            Toast.show({
-              type: 'push',
-              position: 'top',
-              text1,
-              text2,
-              visibilityTime: 6000,
-              topOffset: 50,
-              onPress: () => {
-                Toast.hide();
-                openDeepLinkTarget(STAY_BOOKINGS);
-              },
-            });
-          }),
-        )
-        .catch(() => {});
+    const show = news =>
+      news.forEach(n => {
+        const [text1, text2] = STAY_NEWS[n.kind](n.name, n.wallet);
+        Toast.show({
+          type: 'push',
+          position: 'top',
+          text1,
+          text2,
+          visibilityTime: 6000,
+          topOffset: 50,
+          onPress: () => {
+            Toast.hide();
+            openDeepLinkTarget(STAY_BOOKINGS);
+          },
+        });
+      });
+    const run = () => recoverOpenBookings().then(show).catch(() => {});
     run();
+    const stopWatch = watchOpenBookings(show);
     const sub = AppState.addEventListener('change', state => state === 'active' && run());
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      stopWatch();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSplash]);
 

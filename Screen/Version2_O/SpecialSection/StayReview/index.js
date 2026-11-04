@@ -403,7 +403,7 @@ export default function StayReview({navigation, route}) {
       }
       setPhase('idle');
       if (next === 'pending') {
-        hold.settle('pending');
+        hold.settle('pending', r?.booking?.holdExpiresAt);
         after.current = 'wait';
         setNotice("We'll notify you once your payment is confirmed. Tap Proceed to pay to check again.");
       } else if (next === 'expired') {
