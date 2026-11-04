@@ -45,6 +45,18 @@ async function headers() {
   return h;
 }
 
+// Server clock minus this phone's (ms), from each response's Date header, so
+// countdowns like the hold timer don't trust a phone set to the wrong time.
+let skew = 0;
+export const serverNow = () => Date.now() + skew;
+function readClock(res) {
+  const at = Date.parse(res?.headers?.date);
+  if (at) {
+    const d = at - Date.now();
+    skew = Math.abs(d) < 3000 ? 0 : d; // the header is to the second: ignore small gaps
+  }
+}
+
 /** `request('GET', '/stays/home', {params})` → the response's `data`. */
 export async function request(method, path, {params, body, timeout = 15000} = {}) {
   try {
@@ -56,6 +68,7 @@ export async function request(method, path, {params, body, timeout = 15000} = {}
       timeout,
       headers: await headers(),
     });
+    readClock(res);
     const json = res.data || {};
     if (json.success === false) {
       throw new ApiError(res.status, json.message, json.errors, json.data);

@@ -1,6 +1,7 @@
 // Stays API (docs: stays-api.md) and the adapters that turn its objects into
 // the shapes the Stays screens were built on, so the UI code barely changes.
 import {request, USE_MOCK} from './client';
+import {forget, remember} from './openBookings';
 import {useQuery} from './useQuery';
 import {images} from '../data';
 import * as mock from '../Stays/data';
@@ -9,6 +10,7 @@ import * as sd from '../StayDetail/data';
 const P = '/stays';
 
 export const getHome = () => request('GET', `${P}/home`);
+export const getBooking = id => request('GET', `${P}/bookings/${id}`);
 export const getBookings = tab => request('GET', `${P}/bookings`, {params: {tab}});
 export const likeProperty = (id, liked) => request('POST', `${P}/properties/${id}/like`, {body: {liked}});
 export const reviewBooking = (id, rating, quote) =>
@@ -434,15 +436,30 @@ export function roomsFor(adults, children, suite) {
 // Review and reserving again never races the room it just gave back.
 const releasing = new Set();
 export function releaseBooking(id) {
-  const p = request('POST', `${P}/bookings/${id}/release`).finally(() => releasing.delete(p));
+  const p = request('POST', `${P}/bookings/${id}/release`)
+    .then(
+      r => {
+        forget(id);
+        return r;
+      },
+      e => {
+        // Offline: stays on disk and is retried later. Any answer from the
+        // server means there is nothing left to release.
+        if (e.status) {
+          forget(id);
+        }
+        throw e;
+      },
+    )
+    .finally(() => releasing.delete(p));
   releasing.add(p);
   return p;
 }
 
 /** POST /holds. `cin` / `cout` are local Dates. Waits for any release still in flight. */
-export const createHold = async ({propertyId, roomTypeId, cin, cout, rooms = 1, adults = 1, children = 0, couponCode}) => {
+export const createHold = async ({propertyId, roomTypeId, cin, cout, rooms = 1, adults = 1, children = 0, couponCode, name}) => {
   await Promise.all([...releasing].map(r => r.catch(() => {})));
-  return request('POST', `${P}/holds`, {
+  const res = await request('POST', `${P}/holds`, {
     body: {
       propertyId,
       roomTypeId,
@@ -455,6 +472,8 @@ export const createHold = async ({propertyId, roomTypeId, cin, cout, rooms = 1, 
       idempotencyKey: opId(),
     },
   });
+  remember(res.booking?.bookingId, {phase: 'held', propertyId, name});
+  return res;
 };
 
 /** PATCH a held booking; dates as local Dates. Returns {booking, quote}. */

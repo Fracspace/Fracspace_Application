@@ -1,5 +1,5 @@
 // Stays listing (Stays.dc.html): "Explore stays" / "My bookings" tabs.
-import React, {useCallback, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {StyleSheet, Text, View, useWindowDimensions} from 'react-native';
 import Animated, {
   interpolateColor,
@@ -78,11 +78,18 @@ function ViewTabs({view, setView, upcoming}) {
   );
 }
 
-export default function Stays({navigation}) {
+export default function Stays({navigation, route}) {
   const {height} = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const [view, setView] = useState('explore');
+  // A push or banner opens My bookings ({view: 'bookings'}).
+  const asked = route?.params?.view;
+  useEffect(() => {
+    if (asked) {
+      setView(asked);
+    }
+  }, [asked]);
   const home = useStaysHome();
   const paused = home.data && !home.data.enabled;
   const [searchTop, setSearchTop] = useState(0);

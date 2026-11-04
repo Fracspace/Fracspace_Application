@@ -2,6 +2,8 @@
 // countdown, pay, and releasing the room if the guest leaves without paying.
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {patchBooking, payBooking, releaseBooking, toReviewState} from '../api/stays';
+import {serverNow} from '../api/client';
+import {forget, own, remember} from '../api/openBookings';
 
 /** `booking` = the hold from Stay Detail's Reserve; null = mock mode. */
 export function useHold(booking) {
@@ -12,6 +14,8 @@ export function useHold(booking) {
   const id = booking?.bookingId;
   const done = useRef(false); // paid, confirming, released or expired: nothing to release
   const paying = useRef(false); // checkout open: the server decides if the hold ran out
+  // While Review is open, the launch / foreground clean-up leaves this booking alone.
+  useEffect(() => own(id), [id]);
   /**
    * Leaving without paying: give the room back now (once). Review calls it on
    * `beforeRemove`, which fires however the screen is left; not on unmount, so
@@ -65,17 +69,18 @@ export function useHold(booking) {
       return;
     }
     const tick = () => {
-      const s = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+      const s = Math.max(0, Math.round((expiresAt - serverNow()) / 1000));
       setLeft(s);
       if (s === 0 && !paying.current) {
         done.current = true;
+        forget(id);
         setExpired(true);
       }
     };
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [expiresAt, expired]);
+  }, [id, expiresAt, expired]);
 
   /** POST /pay. Resolves to the server's answer ({requiresPayment, booking, payment}). */
   const pay = useCallback(
@@ -84,8 +89,11 @@ export function useHold(booking) {
         const res = await payBooking(id, useWallet);
         if (res.requiresPayment) {
           paying.current = true;
+          // If the app dies in the checkout, the next launch asks the server about it.
+          remember(id, {phase: 'paying', attemptId: res.payment?.attemptId});
         } else {
           done.current = true;
+          forget(id);
         }
         return res;
       } catch (e) {
@@ -96,20 +104,30 @@ export function useHold(booking) {
   );
 
   /**
-   * The checkout's outcome from the server: `keep` = the booking is paid or
-   * still confirming (never release it); otherwise the hold is back to normal.
+   * The checkout's outcome from the server (`next`): confirmed or cancelled is
+   * finished; pending stays on disk for the server to settle later; anything
+   * else puts the hold back to normal.
    */
-  const settle = useCallback(keep => {
-    paying.current = false;
-    if (keep) {
-      done.current = true;
-    }
-  }, []);
+  const settle = useCallback(
+    next => {
+      paying.current = false;
+      if (next === 'pending') {
+        done.current = true;
+      } else if (next === 'confirmed' || next === 'cancelled') {
+        done.current = true;
+        forget(id);
+      } else {
+        remember(id, {phase: 'held'});
+      }
+    },
+    [id],
+  );
   const expire = useCallback(() => {
     paying.current = false;
     done.current = true;
+    forget(id);
     setExpired(true);
-  }, []);
+  }, [id]);
 
   return {live: !!booking, id, state, busy, expired, left, patch, pay, settle, expire, release};
 }

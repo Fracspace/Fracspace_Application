@@ -3,7 +3,7 @@
 // tab. Payment is mocked (Proceed → 1.2s processing → confirm animation →
 // success) until stays have a booking API; see `mockReceipt`.
 import React, {memo, useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {BackHandler, Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View} from 'react-native';
+import {AppState, BackHandler, Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, {Easing, useAnimatedStyle, useSharedValue, withTiming} from 'react-native-reanimated';
 import LinearGradient from 'react-native-linear-gradient';
@@ -389,24 +389,24 @@ export default function StayReview({navigation, route}) {
       }
       const next = nextOf(r);
       if (next === 'confirmed') {
-        hold.settle(true);
+        hold.settle('confirmed');
         after.current = null;
         paidOk(r.booking);
         return;
       }
       setPhase('idle');
       if (next === 'pending') {
-        hold.settle(true);
+        hold.settle('pending');
         after.current = 'wait';
         setNotice("We'll notify you once your payment is confirmed. Tap Proceed to pay to check again.");
       } else if (next === 'expired') {
         hold.expire();
       } else if (next === 'cancelled') {
-        hold.settle(true);
+        hold.settle('cancelled');
         after.current = 'closed';
         setNotice('This booking was cancelled. Check My bookings for details.');
       } else {
-        hold.settle(false);
+        hold.settle('failed');
         setNotice(
           event === 'onPaymentCancel'
             ? 'Payment cancelled. Tap Proceed to pay to try again.'
@@ -463,6 +463,35 @@ export default function StayReview({navigation, route}) {
       t2.current = setTimeout(() => setPhase('done'), CONFIRM_MS);
     }, 1200);
   }, [phase, live, hold, walletOn, patch, paidOk, outcome]);
+
+  // Back from the background (a long pause, another app): the hold may have run
+  // out or a slow payment come through meanwhile, so ask the server again. Not
+  // while the checkout is open or confirming: those report on their own.
+  useEffect(() => {
+    if (!live || phase !== 'idle' || hold.expired) {
+      return;
+    }
+    const sub = AppState.addEventListener('change', s => {
+      if (s !== 'active') {
+        return;
+      }
+      paymentStatus(hold.id)
+        .then(r => {
+          const status = r?.booking?.status || r?.status;
+          if (status === 'confirmed') {
+            hold.settle('confirmed');
+            paidOk(r.booking);
+          } else if (status === 'expired') {
+            hold.expire();
+          } else if (status === 'cancelled' || (status === 'pending_payment' && after.current === 'wait')) {
+            setPhase('busy');
+            outcome(r);
+          }
+        })
+        .catch(() => {});
+    });
+    return () => sub.remove();
+  }, [live, phase, hold, paidOk, outcome]);
 
   // Android back: closes the calendar, waits out the payment, leaves success for Home.
   useEffect(() => {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Linking, Alert, Platform, PermissionsAndroid, View, StatusBar } from 'react-native';
+import { StyleSheet, Linking, Alert, Platform, PermissionsAndroid, View, StatusBar, AppState } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { Provider } from 'react-redux';
 import messaging from '@react-native-firebase/messaging';
@@ -21,6 +21,7 @@ import NetInfo from '@react-native-community/netinfo';
 import NoInternet from './Screen/components/NoInternet';
 import { applyStatusBarForRoute } from './Screen/utils/statusBar';
 import { trackEvent, trackScreen } from './Screen/utils/analytics';
+import { recoverOpenBookings } from './Screen/Version2_O/SpecialSection/api/recover';
 
 // OTA updates: Stallion on both platforms.
 import * as Stallion from 'react-native-stallion';
@@ -88,7 +89,19 @@ const PAYMENT_FLOW_ROUTES = new Set([
   'ConcertReviewBooking',
   'ConcertPaymentPage',
   'EscapePaymentPage',
+  'StayReview',
 ]);
+
+// Stays · My bookings (inside the Special Section tab).
+const STAY_BOOKINGS = {
+  screen: 'BottomNavigations',
+  params: { screen: 'SpecialSectionStack', params: { screen: 'Stays', params: { view: 'bookings' } } },
+};
+const STAY_NEWS = {
+  confirmed: name => ['Booking confirmed', `Your payment for ${name} went through.`],
+  pending: name => ['Confirming your payment', `We're still confirming your payment for ${name}. We'll notify you.`],
+  failed: name => ['Payment didn\'t go through', `Your payment for ${name} didn't go through. Reserve again to book.`],
+};
 
 const App = () => {
   const pendingLinkRef = useRef(null);
@@ -161,7 +174,9 @@ const App = () => {
   // Keys: deep_link_value (+ deep_link_sub1 for an id), optional campaign.
   // See docs/DEVELOPER-GUIDE.md "Push notification deep links".
   const openFromNotification = (remoteMessage, appState) => {
-    const data = remoteMessage?.data;
+    const raw = remoteMessage?.data;
+    // Stay booking pushes carry {type: 'stay_booking', event, bookingId}.
+    const data = raw?.type === 'stay_booking' ? { ...raw, deep_link_value: 'stay_bookings' } : raw;
     if (!data?.deep_link_value) return;
     // 'notification_open' is reserved by Firebase (logEvent rejects it).
     trackEvent('push_open', {
@@ -213,6 +228,37 @@ const App = () => {
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Stays: holds and payments left open when the app was closed (killed in the
+  // PayU checkout, a release that failed offline) are settled after the splash
+  // and on every return to the foreground; the outcome shows as a banner.
+  useEffect(() => {
+    if (showSplash) return;
+    const run = () =>
+      recoverOpenBookings()
+        .then(news =>
+          news.forEach(n => {
+            const [text1, text2] = STAY_NEWS[n.kind](n.name);
+            Toast.show({
+              type: 'push',
+              position: 'top',
+              text1,
+              text2,
+              visibilityTime: 6000,
+              topOffset: 50,
+              onPress: () => {
+                Toast.hide();
+                openDeepLinkTarget(STAY_BOOKINGS);
+              },
+            });
+          }),
+        )
+        .catch(() => {});
+    run();
+    const sub = AppState.addEventListener('change', state => state === 'active' && run());
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSplash]);
 
   useEffect(() => {
     const getDeviceToken = async() => {
@@ -273,6 +319,8 @@ const App = () => {
         screen: 'BottomNavigations',
         params: { screen: 'ProfileStack', params: { screen: 'Profile' } },
       };
+    } else if (data.deep_link_value === 'stay_bookings') {
+      redirectData = STAY_BOOKINGS;
     } else if (data.deep_link_value === 'dreamscape_section') {
       redirectData = {
         screen: 'BottomNavigations',
