@@ -188,3 +188,11 @@ a new attempt (new txnid) and the first stays open. To resume, `/pay` should ret
 moves `holdUntil` 15 min on, so opening and closing PayU can hold a room indefinitely; keep the first `holdUntil` or cap
 attempts per booking (429).
 
+
+### Timed re-check while the app stays open — 2026-11-04, iOS simulator — ✅ app
+Booking `sbkg_TICfV9uxnw6o` (₹1.02, wallet off, attempt `ST261104TNFEWBZU` never sent to PayU), app left open:
+```
+13:03:26.692 /payment-result next=pending → "next check in 1012s" (holdUntil 07:48:18Z + 2 min sweep)
+13:20:18.526 timer fires, no tap needed → GET booking: payment_failed → banner "Payment didn't go through"
+```
+Server again ended an unpaid attempt as `payment_failed` with `payment.status=pending` (W7).
