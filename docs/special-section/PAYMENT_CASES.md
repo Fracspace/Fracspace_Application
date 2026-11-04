@@ -113,3 +113,36 @@ and what should happen after the fix. Re-run this list after each round of fixes
   `hold.expiring` needs the booking's stay and suite, so it waits for a `GET /bookings/:id` that carries them.
 - A6 Dropped (2026-11-04): a pending payment must not stop the guest booking. Duplicates are the server's to
   refund (S4).
+
+## Test runs (evidence for the backend)
+
+### T1 · Cancel in PayU, wallet off — 2026-11-04, iOS simulator — ❌ S3 gap
+Booking `sbkg_vQjH4MaDb8-p` (Dreamscape, ₹1.02), attempt `ST261104QA7BZ6CW`. App log (IST):
+```
+10:40:40.458 POST /pay            → status=pending_payment attempt=ST261104QA7BZ6CW holdUntil=05:25:40Z
+10:40:40–43  PayU hashes signed   → get_sdk_configuration, get_all_offer_details, fetch_quick_pay_option,
+                                    get_checkout_details, eligibleBinsForEMI: all 200
+10:40:57.321 PayU event           → onPaymentCancel (guest closed the checkout)
+10:40:57.434 POST /payment-result → next=pending status=pending_payment pay=pending
+10:41:00 → 10:42:57 GET /payment-status every 3 s → next=pending every time
+```
+**For the backend:** after the guest cancels in PayU, `/payment-result` answers `pending`, and the booking stays
+`pending_payment` (room held) until `holdUntil`, 15 minutes after `/pay`. Expected: `failed` (or `cancelled`) within a
+few seconds once PayU confirms there is no payment for the txnid, with the room and any wallet share freed then.
+Re-run 11:19 IST, booking `sbkg_1aUeweNmOiPL`, attempt `ST2611042067BUHU`: `onPaymentCancel` 11:19:51.333 →
+`/payment-result` 11:19:51.723 `next=pending`, then `pending` on every `/payment-status` for 2 minutes. Same result.
+After the first run's booking timed out (10:55:40) it ended as **`payment_failed`, not `expired`** (W7 still open
+when a gateway attempt exists).
+**App side (before the fix):** showed "Confirming your payment…" for 2 minutes, then "We'll notify you…", which is wrong for a cancel. It
+followed the server's `next`. Now the app trusts the SDK's cancel / failure / error for the screen (shows it at
+once, still reports to the server; leaving Review releases the room and wallet share), and waits at most 30 s after
+a success.
+
+Re-check after the app fix, 12:18 IST, booking `sbkg_oYAuOxz7OFWh` — ✅ app side:
+```
+12:18:07.844 onPaymentCancel → 12:18:07.923 /payment-result next=pending → "Payment cancelled" shown at once (no polling)
+12:18:20.913 Proceed again   → new attempt ST261104VSWP0F2B → 12:18:24.445 onPaymentCancel, shown at once
+12:19:12.692 back from Review → POST /release → status=expired (room freed at once, not at 12:33)
+```
+For the backend: after that release the booking still reports `payment.status=pending`; it should be cancelled/failed.
+

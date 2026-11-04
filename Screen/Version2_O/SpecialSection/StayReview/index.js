@@ -42,7 +42,11 @@ import {
 } from './data';
 
 const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-const POLL_MS = 120000; // keep checking a pending payment for 2 minutes
+// After PayU reports success, the loader waits this long for the server to
+// confirm (UPI can lag); then "We'll notify you" and the guest is free to go.
+const POLL_MS = 30000;
+// SDK events where the guest saw no payment go through: no point waiting on the server.
+const UNPAID = new Set(['onPaymentCancel', 'onPaymentFailure', 'onError']);
 const wait = ms => new Promise(r => setTimeout(r, ms));
 // payment-result answers with `next`; payment-status may only carry the booking.
 const NEXT = {confirmed: 'confirmed', payment_failed: 'failed', expired: 'expired', cancelled: 'cancelled'};
@@ -377,7 +381,10 @@ export default function StayReview({navigation, route}) {
   // The server's word on the payment, polled while it is pending (UPI can be slow).
   const outcome = useCallback(
     async (start, event) => {
-      let r = start;
+      // The server may still say "pending" after a cancel (it waits on PayU),
+      // so the guest gets the answer at once; leaving Review then releases the
+      // room and the wallet share, and retrying starts a new attempt.
+      let r = UNPAID.has(event) && nextOf(start) === 'pending' ? {...start, next: 'failed'} : start;
       const until = Date.now() + POLL_MS;
       while (nextOf(r) === 'pending' && Date.now() < until && mounted.current) {
         setNotice('Confirming your payment…');

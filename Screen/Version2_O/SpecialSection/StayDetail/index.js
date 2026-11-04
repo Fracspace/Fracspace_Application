@@ -1,7 +1,7 @@
 // Stay Detail (StayDetail.dc.html): hero gallery, suites, amenities, good to
 // know, nearby map, Reserve bar with the "Room held" sheet, policy sheet.
 import React, {forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState} from 'react';
-import {BackHandler, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
+import {Alert, BackHandler, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
 import Animated, {
   runOnJS,
   useAnimatedReaction,
@@ -29,8 +29,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {booking, inr} from './data';
 import {defaultDates, short} from '../StayReview/data';
 import {createHold, day, money, releaseBooking, roomsFor, stayTotal, useStayDetail} from '../api/stays';
-import {errText, USE_MOCK} from '../api/client';
+import {errText, serverNow, USE_MOCK} from '../api/client';
 import {own} from '../api/openBookings';
+import {pendingFor} from '../api/recover';
 import {ErrorCard, Skeleton} from '../api/ui';
 
 const CARD = cssAngle(160);
@@ -224,6 +225,24 @@ function useStage() {
   return stage;
 }
 
+/** Asks whether to book again while `pending` is still confirming; resolves true to go ahead. */
+function bookAgain(pending) {
+  const mins = pending.holdExpiresAt ? Math.max(1, Math.ceil((pending.holdExpiresAt - serverNow()) / 60000)) : null;
+  return new Promise(resolve =>
+    Alert.alert(
+      'You have a booking waiting',
+      `We're still confirming the payment for your earlier booking at ${pending.name || 'this stay'}.` +
+        (mins ? ` It stays held for about ${mins} more min.` : '') +
+        ' You can wait for it, or book again.',
+      [
+        {text: 'Wait', style: 'cancel', onPress: () => resolve(false)},
+        {text: 'Book again', onPress: () => resolve(true)},
+      ],
+      {cancelable: true, onDismiss: () => resolve(false)},
+    ),
+  );
+}
+
 export default function StayDetail({navigation, route}) {
   const stayId = route?.params?.stayId;
   const trip = route?.params?.trip; // {checkIn, checkOut, adults, children} from the search
@@ -324,6 +343,13 @@ export default function StayDetail({navigation, route}) {
       return;
     }
     try {
+      // An earlier booking of this stay still waiting on its payment (the app
+      // was closed in the checkout): the guest decides whether to book again.
+      const pending = await pendingFor(stay.id);
+      if (pending && !(await bookAgain(pending))) {
+        setPhase('idle');
+        return;
+      }
       // The search's dates, unless they have passed since (then tomorrow).
       const dated = trip && day(trip.checkIn) >= defaultDates().cin;
       const {cin, cout} = dated ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : defaultDates();

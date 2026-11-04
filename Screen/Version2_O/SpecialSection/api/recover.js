@@ -73,7 +73,13 @@ export function recoverOpenBookings() {
       const news = [];
       for (const [id, e] of Object.entries(all)) {
         if (!isOwned(id)) {
+          if (__DEV__) {
+            console.log('[recover]', id, `phase=${e.phase}`, e.attemptId || '');
+          }
           const n = await settleOne(id, e).catch(() => null);
+          if (__DEV__ && n) {
+            console.log('[recover]', id, `banner=${n.kind}`);
+          }
           n && news.push(n);
         }
       }
@@ -83,4 +89,23 @@ export function recoverOpenBookings() {
     });
   }
   return running;
+}
+
+/**
+ * Before a new Reserve: this property's booking whose payment is still being
+ * confirmed (checked with the server first), as {id, name, holdExpiresAt}, else null.
+ */
+export async function pendingFor(propertyId) {
+  await recoverOpenBookings().catch(() => {});
+  const all = await readOpen();
+  const hit = Object.entries(all).find(([id, e]) => e.phase === 'paying' && e.propertyId === propertyId && !isOwned(id));
+  if (!hit) {
+    return null;
+  }
+  const r = await getBooking(hit[0]).catch(() => null);
+  const b = r?.booking || r;
+  if (b?.status !== 'pending_payment') {
+    return null;
+  }
+  return {id: hit[0], name: hit[1].name, holdExpiresAt: b.holdExpiresAt ? Date.parse(b.holdExpiresAt) : null};
 }
