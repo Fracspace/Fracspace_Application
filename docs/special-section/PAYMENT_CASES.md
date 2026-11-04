@@ -223,3 +223,16 @@ Booking `sbkg_5cke6b-d4VAV`, attempt `ST261104L230GND2`:
 **What this shows about S3:** when PayU has a transaction for the txnid (here a failed one) the server answers
 `failed` at once. When the guest closes PayU before any transaction exists (T1, T3) it answers `pending` until the
 hold ends. For the backend: sign `send_sign_in_otp` (PayU's saved-card / quick-pay sign-in).
+
+### Android · PayU stuck on "Processing…" — 2026-11-04 15:27 IST, OnePlus CPH2643 (debug) — ❌ blocks Android
+Booking `sbkg_Ac0r9PwJ7TsF`, attempt `ST261104VP9D5JNH`. logcat (ReactNativeJS):
+```
+15:27:29.170 POST /pay → pending_payment
+15:27:30.110–.129 generateHash get_checkout_details, get_sdk_configuration, get_all_offer_details
+15:27:30.297 generateHash quickPayEvent
+15:27:30.383 POST /payments/payu/hash → 400 "Hash quickPayEvent cannot be signed"
+```
+The Android SDK (unlike iOS) asks for `quickPayEvent` and waits for it, so the checkout never gets past "Processing…"
+and the app shows "Payment could not start". There is no app-side switch for quick pay in the bridge
+(`enableSavedCard` is only saved cards). **For the backend:** sign `quickPayEvent` (and `send_sign_in_otp`, seen on
+iOS in T6c), ideally every CheckoutPro hash name, the same way as the others.
