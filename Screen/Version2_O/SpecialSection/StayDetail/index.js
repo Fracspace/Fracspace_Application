@@ -31,7 +31,6 @@ import {defaultDates, short} from '../StayReview/data';
 import {createHold, day, money, releaseBooking, roomsFor, stayTotal, useStayDetail} from '../api/stays';
 import {errText, USE_MOCK} from '../api/client';
 import {own} from '../api/openBookings';
-import {openPaymentFor} from '../api/recover';
 import {ErrorCard, Skeleton} from '../api/ui';
 
 const CARD = cssAngle(160);
@@ -325,14 +324,6 @@ export default function StayDetail({navigation, route}) {
       return;
     }
     try {
-      // A payment for this stay still open from before (the app was closed in
-      // the checkout): don't hold and charge a second time.
-      const open = await openPaymentFor(stay.id);
-      if (open) {
-        setPhase('idle');
-        toast.current?.show('Your earlier payment for this stay is still being confirmed. Try again in a few minutes.');
-        return;
-      }
       // The search's dates, unless they have passed since (then tomorrow).
       const dated = trip && day(trip.checkIn) >= defaultDates().cin;
       const {cin, cout} = dated ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : defaultDates();

@@ -70,10 +70,25 @@ and what should happen after the fix. Re-run this list after each round of fixes
 | ID | Case | How to test | Today | After fix | Owner | iOS | Android |
 |---|---|---|---|---|---|---|---|
 | R1 | Reopen after a kill mid-payment | P6 / P7, then reopen the app | ❌ nothing shown | Pending booking shown: success, confirming, or retry (A2) | App | ☐ | ☐ |
-| R2 | Reserve again while one is pending | R1, then Reserve the same stay | ❌ a second hold and possibly a second payment | Pending booking shown instead (A6) | App | ☐ | ☐ |
+| R2 | Reserve again while one is pending | R1, then Reserve the same stay and pay | ⚠️ allowed (by choice); both payments can go through | Guest can book; if both succeed the extra one is refunded (S4) | Server | ☐ | ☐ |
 | R3 | Push `booking.confirmed` tapped | Pay, wait for the push | ❔ | Opens My bookings → that booking (A5) | App | ☐ | ☐ |
 | R4 | Push `payment.failed` / `hold.expiring` tapped | Trigger each | ❌ not handled | Opens Review Booking (A5) | App | ☐ | ☐ |
 | R5 | My bookings after each case | Check tabs after H1–P19 | ❔ held / expired bookings not listed | Each booking in the right tab and status | Both | ☐ | ☐ |
+
+## Server re-check (2026-11-04, apitest, wallet not touched)
+
+| Fix | Result |
+|---|---|
+| S1 expiry job | ✅ an unpaid `pending_payment` booking turned `expired` at its expiry |
+| S2 one hold per guest | ✅ a second `POST /holds` for the same room and dates expired the first |
+| S3 settle unpaid attempts | ❌ `payment-result` for an attempt PayU never saw answers `pending` (also with `onPaymentCancel`) until the 15-min expiry |
+| S5 `/pay` idempotency | ❌ the same `idempotencyKey` twice gave two attempts (unless it's read from somewhere else: ask) |
+| S6 `PATCH` while paying | ⚠️ `200`; the booking goes back to `held` (the attempt is dropped). Fine if PayU can't still take that attempt |
+| S7 server time | ✅ `booking.serverTime` (the app already uses the `Date` header) |
+| W7 status after expiry | ✅ `expired`, not `payment_failed` |
+| `release` while paying | ✅ allowed (`200`, `expired`); the app never calls it mid-checkout |
+| W1/W2, W6 wallet | ❔ not run here: it moves real wallet money. Test in the app with a ₹1 room |
+| S4 late / double success | ❔ needs a real payment |
 
 ## Fixes
 
@@ -96,4 +111,5 @@ and what should happen after the fix. Re-run this list after each round of fixes
 - A4 Re-check the server when Review returns to the foreground; countdown from server time.
 - A5 Handle `stay_booking` push taps: they open Stays → My bookings. Opening Review from `payment.failed` /
   `hold.expiring` needs the booking's stay and suite, so it waits for a `GET /bookings/:id` that carries them.
-- A6 Reserve shows an open pending payment for the same stay instead of holding again.
+- A6 Dropped (2026-11-04): a pending payment must not stop the guest booking. Duplicates are the server's to
+  refund (S4).

@@ -1,6 +1,6 @@
-// Settles what openBookings.js remembered: on launch, on return to the
-// foreground and before a new Reserve. A hold no screen owns is released; a
-// payment the app never reported is reported now (the server asks PayU).
+// Settles what openBookings.js remembered, on launch and on every return to
+// the foreground: a hold no screen owns is released, and a payment the app
+// never reported is reported now (the server asks PayU).
 import {getBooking, paymentResult, paymentStatus, releaseBooking} from './stays';
 import {forget, isOwned, readOpen, remember, settled} from './openBookings';
 
@@ -83,12 +83,4 @@ export function recoverOpenBookings() {
     });
   }
   return running;
-}
-
-/** Before a new Reserve: an unfinished payment for this property (after checking it again), else null. */
-export async function openPaymentFor(propertyId) {
-  await recoverOpenBookings().catch(() => {});
-  const all = await readOpen();
-  const hit = Object.entries(all).find(([id, e]) => e.phase === 'paying' && e.propertyId === propertyId && !isOwned(id));
-  return hit ? {id: hit[0], ...hit[1]} : null;
 }
