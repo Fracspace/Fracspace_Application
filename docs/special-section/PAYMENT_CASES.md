@@ -196,3 +196,14 @@ Booking `sbkg_TICfV9uxnw6o` (₹1.02, wallet off, attempt `ST261104TNFEWBZU` nev
 13:20:18.526 timer fires, no tap needed → GET booking: payment_failed → banner "Payment didn't go through"
 ```
 Server again ended an unpaid attempt as `payment_failed` with `payment.status=pending` (W7).
+
+### T5c · Card payment, app killed after the OTP, reopened — 2026-11-04 14:12 IST, iOS simulator — ✅
+Booking `sbkg_tHeTyNGnk5pe` (Dreamscape, ₹1.02, debit card), attempt `ST2611045GH5X2E9`:
+```
+14:12:34.562 POST /pay → pending_payment
+             OTP submitted, app killed before PayU reported back
+14:14:48.572 server marks it paid (payment.paidAt; PayU's callback, the app was closed)
+14:15:19.608 reopened: clean-up → GET booking: status=confirmed pay=success → banner "Booking confirmed"
+```
+Booking is in My bookings → Upcoming. The server learned of the payment without the app (surl/webhook works), and
+the app picked it up on reopen. (P7 / R1 pass on the success path.)
