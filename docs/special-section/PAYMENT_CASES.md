@@ -207,3 +207,19 @@ Booking `sbkg_tHeTyNGnk5pe` (Dreamscape, ₹1.02, debit card), attempt `ST261104
 ```
 Booking is in My bookings → Upcoming. The server learned of the payment without the app (surl/webhook works), and
 the app picked it up on reopen. (P7 / R1 pass on the success path.)
+
+### T6c · Card declined (3 wrong OTPs), then PayU closed — 2026-11-04 14:17 IST, iOS simulator — ✅
+Booking `sbkg_5cke6b-d4VAV`, attempt `ST261104L230GND2`:
+```
+14:17:51.373 POST /pay → pending_payment
+14:18:03.079 PayU asks for hash send_sign_in_otp → 400 "Hash send_sign_in_otp cannot be signed"
+             3 wrong OTPs → bank fails it → PayU returns to its own payment page (retry inside the checkout;
+             nothing reported to the app yet)
+14:18:31.633 getBinBasedDetails signed (PayU's retry screen)
+14:21:40.134 guest closes PayU → onPaymentCancel
+14:21:40.303 POST /payment-result → next=failed pay=failure   ← server answers at once here
+14:21:55.548 back from Review → POST /release → status=expired (room freed)
+```
+**What this shows about S3:** when PayU has a transaction for the txnid (here a failed one) the server answers
+`failed` at once. When the guest closes PayU before any transaction exists (T1, T3) it answers `pending` until the
+hold ends. For the backend: sign `send_sign_in_otp` (PayU's saved-card / quick-pay sign-in).
