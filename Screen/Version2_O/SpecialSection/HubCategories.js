@@ -250,7 +250,7 @@ export default React.memo(function HubCategories({onStays, onShop, onConcerts}) 
 });
 
 const styles = StyleSheet.create({
-  sec: {paddingTop: 34, paddingHorizontal: 20},
+  sec: {paddingTop: 5, paddingHorizontal: 20},
   head: {flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16},
   grid: {flexDirection: 'row', gap: 12},
   half: {flex: 1},
