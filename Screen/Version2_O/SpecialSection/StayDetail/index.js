@@ -170,10 +170,11 @@ const Page = memo(function Page({scrollY, contentRef, height, stage, stay, suite
             </Reveal>
             {stay.about ? (
               <Reveal style={styles.cardWrap}>
-                <LinearGradient colors={['#17161A', '#111114']} start={CARD.start} end={CARD.end} style={styles.card}>
+                <View style={styles.card}>
+                  <LinearGradient colors={['#17161A', '#111114']} start={CARD.start} end={CARD.end} style={StyleSheet.absoluteFill} />
                   <Text style={styles.aboutTitle}>About the {stay.short}</Text>
                   <About text={stay.about} />
-                </LinearGradient>
+                </View>
               </Reveal>
             ) : null}
             {stay.suites.length ? (
@@ -525,7 +526,10 @@ const styles = StyleSheet.create({
   rate: {fontFamily: fonts.bold, fontSize: 13, color: '#fff'},
   addr: {fontFamily: fonts.regular, fontSize: 13, color: colors.muted, flexShrink: 1},
   cardWrap: {marginTop: 20},
-  card: {padding: 18, borderRadius: 24, borderWidth: 1, borderColor: colors.borderStrong},
+  // The gradient sits behind the content in a clipped card: iOS doesn't clip a
+  // LinearGradient to its own borderRadius, which showed a square box behind
+  // the rounded border.
+  card: {padding: 18, borderRadius: 24, borderWidth: 1, borderColor: colors.borderStrong, overflow: 'hidden'},
   aboutTitle: {fontFamily: fonts.bold, fontSize: 17, color: '#fff', marginBottom: 8},
   about: {fontFamily: fonts.regular, fontSize: 13, lineHeight: 13 * 1.65, color: colors.soft},
   measure: {position: 'absolute', left: 0, right: 0, opacity: 0},
