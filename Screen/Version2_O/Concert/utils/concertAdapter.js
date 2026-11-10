@@ -357,22 +357,15 @@ export function normalizeSection(payload, wantedId) {
 
 export default normalizeSection;
 
-// A show counts as over this long after its start (the API sends no end time).
-const CONCERT_OVER_AFTER_MS = 6 * 60 * 60 * 1000;
-
 /**
- * Whether the home screen should still promote the concert.
+ * Whether home should promote the concert: the floating video card and the
+ * banner after Categories both follow this one switch from the dashboard
+ * (section on, an active concert, and concert.homeCard.enabled not false).
  *   null  - not loaded yet (render nothing, so no banner flashes)
- *   false - the section is off, there is no concert, or every city's show
- *           has finished
- *   true  - at least one city's show is still to come (or no dates are known)
+ *   false - turned off, no active concert, or the section failed to load
+ *   true  - on (homeCard.enabled defaults to on when the API leaves it out)
  */
-export function isConcertLive(section, now = Date.now()) {
+export function isConcertHomeOn(section) {
   if (!section) return null;
-  if (!section.enabled || !section.concert) return false;
-  const starts = (section.concert.cities || [])
-    .map(c => Date.parse(c && c.startsAt))
-    .filter(n => !isNaN(n));
-  if (!starts.length) return true;
-  return now < Math.max(...starts) + CONCERT_OVER_AFTER_MS;
+  return !!section.enabled && !!section.concert && section.concert.homeCard?.enabled !== false;
 }
