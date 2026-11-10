@@ -14,7 +14,7 @@ import {colors, fonts, ls, type} from './theme';
 import {E, LoopGate, Nudge, PressScale, Reveal, Sheen, kf, useLinger, useReducedMotion, useToggle} from './anim';
 import {useRenderCount} from './perf';
 import {ArrowIcon, Tag} from './HubBits';
-import {ivaProducts} from './data';
+import {ivaProducts, shopComingSoon} from './data';
 import {likeProperty, useStaysHome} from './api/stays';
 
 const CARD_W = 288;
@@ -23,7 +23,7 @@ const ICARD_W = 166;
 const ICARD_GAP = 12;
 const HEART = 'M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z';
 
-function SectionHead({tag, title, sub, link, onLink}) {
+function SectionHead({tag, title, sub, link, onLink, soon}) {
   return (
     <Reveal style={styles.head}>
       <Tag dot>{tag}</Tag>
@@ -32,10 +32,16 @@ function SectionHead({tag, title, sub, link, onLink}) {
           <Text style={type.h2}>{title}</Text>
           <Text style={[type.muted, {fontSize: 12.5}]}>{sub}</Text>
         </View>
-        <Pressable onPress={onLink} style={styles.link} accessibilityRole="link">
-          <Text style={type.link}>{link}</Text>
-          <Nudge style={type.link} />
-        </Pressable>
+        {soon ? (
+          <View style={styles.link}>
+            <Tag>COMING SOON</Tag>
+          </View>
+        ) : (
+          <Pressable onPress={onLink} style={styles.link} accessibilityRole="link">
+            <Text style={type.link}>{link}</Text>
+            <Nudge style={type.link} />
+          </Pressable>
+        )}
       </View>
     </Reveal>
   );
@@ -245,6 +251,32 @@ function Stepper({qty, onInc, onDec, name}) {
   );
 }
 
+/** Coming-soon product card: same layout, dimmed, nothing to tap or add. */
+function IvaSoonCard({product}) {
+  return (
+    <View
+      style={[styles.icard, styles.dim]}
+      accessible
+      accessibilityLabel={`${product.name}, coming soon`}
+      accessibilityState={{disabled: true}}>
+      <View style={styles.itile}>
+        {product.img ? (
+          <Image source={product.img} resizeMode="cover" style={styles.fill} />
+        ) : (
+          <View style={styles.phIva}>
+            <Text style={styles.phIvaText}>IVA</Text>
+          </View>
+        )}
+      </View>
+      <Text style={[type.muted, {fontSize: 11, marginTop: 2}]}>{product.cat}</Text>
+      <Text style={styles.iname}>{product.name}</Text>
+      <View style={styles.irow}>
+        <Text style={styles.iprice}>₹{product.price}</Text>
+      </View>
+    </View>
+  );
+}
+
 function IvaCard({product, qty, onInc, onDec, onOpen}) {
   return (
     <View style={styles.icard}>
@@ -278,6 +310,7 @@ export const IvaEssentials = React.memo(function IvaEssentials({qty, setQty, onO
         sub="Spiritual décor & artisanal essentials"
         link="Explore"
         onLink={onOpenShop}
+        soon={shopComingSoon}
       />
       <Animated.ScrollView
         horizontal
@@ -286,6 +319,9 @@ export const IvaEssentials = React.memo(function IvaEssentials({qty, setQty, onO
         decelerationRate="fast"
         contentContainerStyle={styles.irail}>
         {ivaProducts.map(p => {
+          if (shopComingSoon) {
+            return <IvaSoonCard key={p.id} product={p} />;
+          }
           const q = qty[p.id] || 0;
           return (
             <IvaCard
@@ -365,6 +401,7 @@ const styles = StyleSheet.create({
   fill: {width: '100%', height: '100%'},
   head: {gap: 8, paddingHorizontal: 20, marginBottom: 14},
   headRow: {flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between'},
+  dim: {opacity: 0.45},
   link: {flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44},
   srail: {gap: CARD_GAP, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8},
   scard: {

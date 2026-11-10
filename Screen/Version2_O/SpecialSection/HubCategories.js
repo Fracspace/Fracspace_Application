@@ -5,9 +5,10 @@ import Animated, {Easing, useAnimatedStyle} from 'react-native-reanimated';
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, {Circle, Ellipse, G, Path, Rect} from 'react-native-svg';
 import {colors, fonts, type} from './theme';
-import {E, PressScale, Reveal, Sheen, cssAngle, kf, useLoop} from './anim';
+import {E, LoopGate, PressScale, Reveal, Sheen, cssAngle, kf, useLoop} from './anim';
 import {useRenderCount} from './perf';
 import {ArrowCircle, MTag, Tag} from './HubBits';
+import {shopComingSoon} from './data';
 
 const CARD_ANGLE = cssAngle(160);
 const K = 44 / 40; // the 40-unit icons are drawn at 44px
@@ -164,7 +165,21 @@ function ConcertIcon() {
   );
 }
 
-function CatCard({style, sheenDelay, onPress, label, children}) {
+function CatCard({style, sheenDelay, onPress, label, disabled, children}) {
+  if (disabled) {
+    // Coming soon: not pressable, no sheen, and its icon loops stay still.
+    return (
+      <View
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={`${label}, coming soon`}
+        accessibilityState={{disabled: true}}
+        style={[styles.cat, style]}>
+        <LinearGradient colors={[colors.cardTop, colors.cardBottom]} start={CARD_ANGLE.start} end={CARD_ANGLE.end} style={StyleSheet.absoluteFill} />
+        <LoopGate active={false}>{children}</LoopGate>
+      </View>
+    );
+  }
   return (
     <PressScale onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={[styles.cat, style]}>
       <LinearGradient colors={[colors.cardTop, colors.cardBottom]} start={CARD_ANGLE.start} end={CARD_ANGLE.end} style={StyleSheet.absoluteFill} />
@@ -192,15 +207,28 @@ export default React.memo(function HubCategories({onStays, onShop, onConcerts}) 
           <MTag>40+ RETREATS</MTag>
           <Text style={styles.meta}>Hotels · Villas · Resorts</Text>
         </CatCard>
-        <CatCard style={styles.half} sheenDelay={500} onPress={onShop} label="Shop">
-          <View style={styles.top}>
-            <ShopIcon />
-            <ArrowCircle />
-          </View>
-          <Text style={styles.h3}>Shop</Text>
-          <MTag>BOUTIQUE</MTag>
-          <Text style={styles.meta}>Membership · Home · Pooja</Text>
-        </CatCard>
+        {shopComingSoon ? (
+          <CatCard style={styles.half} label="Shop" disabled>
+            <View style={styles.top}>
+              <View style={styles.dim}>
+                <ShopIcon />
+              </View>
+            </View>
+            <Text style={[styles.h3, styles.dim]}>Shop</Text>
+            <Tag>COMING SOON</Tag>
+            <Text style={[styles.meta, styles.dim]}>Membership · Home · Pooja</Text>
+          </CatCard>
+        ) : (
+          <CatCard style={styles.half} sheenDelay={500} onPress={onShop} label="Shop">
+            <View style={styles.top}>
+              <ShopIcon />
+              <ArrowCircle />
+            </View>
+            <Text style={styles.h3}>Shop</Text>
+            <MTag>BOUTIQUE</MTag>
+            <Text style={styles.meta}>Membership · Home · Pooja</Text>
+          </CatCard>
+        )}
       </Reveal>
       <Reveal style={{marginTop: 12}}>
         <CatCard style={styles.wide} sheenDelay={1000} onPress={onConcerts} label="Concerts">
@@ -226,6 +254,7 @@ const styles = StyleSheet.create({
   head: {flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16},
   grid: {flexDirection: 'row', gap: 12},
   half: {flex: 1},
+  dim: {opacity: 0.45},
   cat: {
     gap: 8,
     padding: 16,
