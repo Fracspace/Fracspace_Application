@@ -499,11 +499,16 @@ export default function SearchSheet({init, step: initStep, onClose}) {
           {s.step === 'when' ? <When key="when" s={s} patch={patch} /> : null}
           {s.step === 'who' ? <Who key="who" s={s} patch={patch} /> : null}
         </ScrollView>
-        <LinearGradient
+        {/* A plain View hosts the buttons: on iOS a LinearGradient container clips them to its padding. */}
+        <View
           pointerEvents="box-none"
-          colors={['rgba(0,0,0,0)', '#000', '#000']}
-          locations={[0, 0.4, 1]}
           style={[styles.fbar, kb ? [styles.fbarKb, {bottom: kb}] : {paddingBottom: 24 + insets.bottom}]}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(0,0,0,0)', '#000', '#000']}
+            locations={[0, 0.4, 1]}
+            style={StyleSheet.absoluteFill}
+          />
           <Pressable onPress={reset} style={styles.freset}>
             <ResetIcon />
             <Text style={styles.fresetText}>RESET</Text>
@@ -511,7 +516,7 @@ export default function SearchSheet({init, step: initStep, onClose}) {
           <PressScale to={0.95} duration={400} onPress={next} style={styles.fnext}>
             <Text style={styles.fnextText}>{s.step === 'who' ? 'SEARCH STAYS' : 'NEXT'}</Text>
           </PressScale>
-        </LinearGradient>
+        </View>
       </Animated.View>
     </Modal>
   );
