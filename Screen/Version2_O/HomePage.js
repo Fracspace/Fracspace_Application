@@ -26,7 +26,7 @@ import EdgeFab from './altaira/FloatingButton';
 import CustomSwiper from '../components/CustomSwiper';
 import ConcertVideoCard from './Concert/components/ConcertVideoCard';
 import HomeTicketShortcut from './Concert/components/HomeTicketShortcut';
-import { normalizeSection } from './Concert/utils/concertAdapter';
+import { isConcertLive, normalizeSection } from './Concert/utils/concertAdapter';
 import { profileDetails } from '../redux/reducer/profileReducer';
 import useAccountActions from '../utils/useAccountActions';
 import DeleteAccountModal from '../components/DeleteAccountModal';
@@ -974,11 +974,25 @@ const Categories = carousel?.category
               </ScrollView> */}
 
             </View>
-            <TouchableOpacity onPress={() => {
-              navigation.navigate('ConcertDetails');
-            }} style={{ paddingTop: 20, paddingHorizontal: 20 }}>
-              <Image resizeMethod="resize" resizeMode='contain' source={{ uri: "https://fracspace-updates.s3.ap-south-1.amazonaws.com/appImages/bgc+(1).png" }} style={{ width: '100%', height: 110, borderRadius: 10}} />
-            </TouchableOpacity>
+            {/* While the concert is on, this banner opens it. Once every city's
+                show is over (or the dashboard turns the section off) it goes
+                back to the Altaira banner. Nothing renders until the concert
+                section has loaded, so neither banner flashes. */}
+            {isConcertLive(concertSection) === null ? (
+              <View style={{ paddingTop: 20, height: 130 }} />
+            ) : isConcertLive(concertSection) ? (
+              <TouchableOpacity onPress={() => {
+                navigation.navigate('ConcertDetails');
+              }} style={{ paddingTop: 20, paddingHorizontal: 20 }}>
+                <Image resizeMethod="resize" resizeMode='contain' source={{ uri: "https://fracspace-updates.s3.ap-south-1.amazonaws.com/appImages/bgc+(1).png" }} style={{ width: '100%', height: 110, borderRadius: 10}} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={() => {
+                navigation.navigate('LableProperty');
+              }} style={{ paddingTop: 20, paddingHorizontal: 20 }}>
+                <Image resizeMethod="resize" resizeMode='contain' source={{ uri: "https://fracspace-updates.s3.ap-south-1.amazonaws.com/appImages/Altaira_Banner.png" }} style={{ width: '100%', height: 110, borderRadius: 10}} />
+              </TouchableOpacity>
+            )}
 
             <View
               style={{

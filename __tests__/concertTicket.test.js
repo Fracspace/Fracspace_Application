@@ -148,3 +148,29 @@ describe('saved tickets on the phone', () => {
     expect((await store.loadSavedTickets()).map(b => b.bookingId)).toEqual(['new']);
   });
 });
+
+describe('home banner after Categories', () => {
+  const { isConcertLive } = require('../Screen/Version2_O/Concert/utils/concertAdapter');
+  const section = starts => ({
+    enabled: true,
+    concert: { cities: starts.map((s, i) => ({ id: 'c' + i, startsAt: s })) },
+  });
+  const now = Date.parse('2026-11-14T20:00:00Z');
+
+  it('waits until the concert section has loaded', () => {
+    expect(isConcertLive(null, now)).toBeNull();
+  });
+  it('promotes the concert while any city is still to come', () => {
+    expect(isConcertLive(section(['2026-11-10T14:00:00Z', '2026-11-20T14:00:00Z']), now)).toBe(true);
+  });
+  it('keeps it during a show that has just started', () => {
+    expect(isConcertLive(section(['2026-11-14T16:00:00Z']), now)).toBe(true);
+  });
+  it('goes back to Altaira once every show is over', () => {
+    expect(isConcertLive(section(['2026-11-10T14:00:00Z', '2026-11-13T14:00:00Z']), now)).toBe(false);
+  });
+  it('goes back to Altaira when the section is off or has no concert', () => {
+    expect(isConcertLive({ enabled: false, concert: null }, now)).toBe(false);
+    expect(isConcertLive({ enabled: true, concert: null }, now)).toBe(false);
+  });
+});
