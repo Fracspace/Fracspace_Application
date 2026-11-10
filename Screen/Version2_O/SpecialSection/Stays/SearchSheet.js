@@ -1,7 +1,7 @@
 // Search flow of the Stays listing (Stays.dc.html, `.flt`): Where → When → Who.
 // The state lives in index.js so the capsules under the search bar can show it.
-import React, {memo, useCallback, useState} from 'react';
-import {Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
+import React, {memo, useCallback, useEffect, useState} from 'react';
+import {Image, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
 import Animated, {Easing, FadeIn, Keyframe, interpolateColor, useAnimatedStyle} from 'react-native-reanimated';
 import Svg, {Circle, Defs, LinearGradient as SvgGradient, Path, Rect, Stop} from 'react-native-svg';
 import LinearGradient from 'react-native-linear-gradient';
@@ -422,8 +422,26 @@ function Summary({label, value, right, onPress, icon}) {
  * Edits its own copy of the search (`init`, opened at `step`) so a tap
  * re-renders only the sheet; `onClose` gets the copy back.
  */
+/** iOS doesn't resize the modal for the keyboard, so the bottom bar has to ride on top of it. */
+function useIosKeyboardHeight() {
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== 'ios') {
+      return undefined;
+    }
+    const show = Keyboard.addListener('keyboardWillShow', e => setH(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardWillHide', () => setH(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return h;
+}
+
 export default function SearchSheet({init, step: initStep, onClose}) {
   const insets = useSafeAreaInsets();
+  const kb = useIosKeyboardHeight();
   const [s, setS] = useState(() => ({...init, step: initStep}));
   // Accepts a patch object or a function of the current state.
   const patch = useCallback(p => setS(x => ({...x, ...(typeof p === 'function' ? p(x) : p)})), []);
@@ -463,7 +481,7 @@ export default function SearchSheet({init, step: initStep, onClose}) {
         </View>
         <ScrollView
           style={styles.grow}
-          contentContainerStyle={[styles.fsc, {paddingBottom: 120 + insets.bottom}]}
+          contentContainerStyle={[styles.fsc, {paddingBottom: 120 + (kb || insets.bottom)}]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           {s.step !== 'where' ? (
@@ -485,7 +503,7 @@ export default function SearchSheet({init, step: initStep, onClose}) {
           pointerEvents="box-none"
           colors={['rgba(0,0,0,0)', '#000', '#000']}
           locations={[0, 0.4, 1]}
-          style={[styles.fbar, {paddingBottom: 24 + insets.bottom}]}>
+          style={[styles.fbar, kb ? [styles.fbarKb, {bottom: kb}] : {paddingBottom: 24 + insets.bottom}]}>
           <Pressable onPress={reset} style={styles.freset}>
             <ResetIcon />
             <Text style={styles.fresetText}>RESET</Text>
@@ -694,6 +712,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingHorizontal: 20,
   },
+  fbarKb: {paddingBottom: 12},
   freset: {flexDirection: 'row', alignItems: 'center', gap: 8, height: 48},
   fresetText: {fontFamily: fonts.semibold, fontSize: 14, letterSpacing: ls(0.06, 14), color: '#E6E0D6'},
   fnext: {
