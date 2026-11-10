@@ -396,6 +396,55 @@ export function buildPaymentSummary(quote, { walletLabel } = {}) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Entry ticket (QR)                                                 *
+ * ------------------------------------------------------------------ */
+
+export const TICKET_STATE = {
+  VALID: 'valid',
+  PARTIALLY_USED: 'partially_used',
+  USED: 'used',
+  VOID: 'void',
+};
+
+/**
+ * `booking.ticket` - null until the booking confirms. `code` is the exact QR
+ * content: opaque, never parsed or built here. It is null on a void ticket,
+ * and a ticket without a code never shows a QR whatever its state says.
+ */
+export function normalizeTicket(apiTicket) {
+  const t = filled(apiTicket);
+  if (!t) return null;
+  const code = typeof t.code === 'string' && t.code ? t.code : null;
+  const known = Object.values(TICKET_STATE);
+  let state = known.indexOf(t.state) !== -1 ? t.state : TICKET_STATE.VALID;
+  if (!code) state = TICKET_STATE.VOID;
+  const tickets = amount(t.tickets);
+  const admitted = amount(t.admitted);
+  const remaining = num(t.remaining) !== null ? amount(t.remaining) : Math.max(tickets - admitted, 0);
+  return {
+    code,
+    state,
+    tickets,
+    admitted,
+    remaining,
+    types: arr(t.types)
+      .filter(x => x && (x.label || x.ticketTypeId))
+      .map(x => ({
+        ticketTypeId: pick(x.ticketTypeId, null),
+        label: pick(x.label, x.ticketTypeId),
+        quantity: amount(x.quantity),
+        admitted: amount(x.admitted),
+        remaining: amount(x.remaining),
+      })),
+    version: amount(t.version),
+    qrImageUrl: pick(t.qrImageUrl, null),
+    issuedAt: pick(t.issuedAt, null),
+    firstAdmittedAt: pick(t.firstAdmittedAt, null),
+    lastAdmittedAt: pick(t.lastAdmittedAt, null),
+  };
+}
+
+/* ------------------------------------------------------------------ *
  *  The booking record (book / verify / pay / list / get all use this)*
  * ------------------------------------------------------------------ */
 
@@ -407,6 +456,9 @@ export function normalizeBookingRecord(apiBooking) {
   const status = pick(b.status, null);
   const payuAmount = amount(p.payuAmount);
   const cancellation = normalizeCancellation(b.cancellation);
+  const ticket = normalizeTicket(b.ticket);
+  // The server answers 409 once anyone has entered; never offer it then.
+  const anyoneEntered = !!ticket && ticket.admitted > 0;
 
   return {
     bookingId: pick(b.bookingId, null),
@@ -461,6 +513,7 @@ export function normalizeBookingRecord(apiBooking) {
 
     cancellation,
     refund: normalizeRefund(b.refund),
+    ticket,
 
     expiresAt: pick(b.expiresAt, null),
     createdAt: pick(b.createdAt, null),
@@ -473,7 +526,8 @@ export function normalizeBookingRecord(apiBooking) {
     /** Can be handed back to /bookings/:id/pay. */
     canResumePayment: status === BOOKING_STATUS.PENDING && payuAmount > 0,
     /** Cancel is offered only when the server says so AND on a confirmed row. */
-    canCancel: status === BOOKING_STATUS.CONFIRMED && !!cancellation && cancellation.allowed,
+    canCancel:
+      status === BOOKING_STATUS.CONFIRMED && !!cancellation && cancellation.allowed && !anyoneEntered,
   };
 }
 

@@ -27,6 +27,7 @@ import ConcertReviewBooking from '../Version2_O/Concert/ConcertReviewBooking';
 import ConcertPaymentPage from '../Version2_O/Concert/ConcertPaymentPage';
 import ConcertBookingSuccess from '../Version2_O/Concert/ConcertBookingSuccess';
 import ConcertBookingFailed from '../Version2_O/Concert/ConcertBookingFailed';
+import ConcertTicketQR from '../Version2_O/Concert/ConcertTicketQR';
 
 
 const Stack = createNativeStackNavigator();
@@ -64,6 +65,7 @@ export default function HomeStack() {
         <Stack.Screen name="ConcertPaymentPage" component={ConcertPaymentPage}/>
         <Stack.Screen name="ConcertBookingSuccess" component={ConcertBookingSuccess}/>
         <Stack.Screen name="ConcertBookingFailed" component={ConcertBookingFailed}/>
+        <Stack.Screen name="ConcertTicketQR" component={ConcertTicketQR} options={{ presentation: 'fullScreenModal', animation: 'fade' }}/>
 
         {/* ------ Dreamscape ------ */}
         <Stack.Screen name="DreamscapeHome" component={DreamscapeHome}/>

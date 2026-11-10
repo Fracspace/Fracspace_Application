@@ -39,6 +39,9 @@ import {
   venueMapUrl,
 } from './utils/concertBookingAdapter';
 import { clearPendingBooking } from './utils/concertPendingBooking';
+import ConcertTicketCard from './components/ConcertTicketCard';
+import { loadSavedTicket, saveTicket } from './utils/concertTicketStore';
+import { useFocusEffect } from '@react-navigation/native';
 
 const TONE = {
   good: { fg: '#CE8F52', bg: 'rgba(206,143,82,0.16)' },
@@ -98,8 +101,7 @@ export default function ConcertBookingDetail({ route, navigation }) {
       const token = await getToken();
       const res = await GetConcertBooking(id, token);
       if (!mounted.current) return;
-      const next = normalizeBookingRecord(res?.data?.data || res?.data);
-      // normalizeBookingRecord answers for any object, so an envelope or a
+      const next = normalizeBookingRecord(res?.data?.data || res?.data);      // normalizeBookingRecord answers for any object, so an envelope or a
       // {data: null} body comes back as a record with no id, no items and no
       // status - which renders as a real booking worth zero rupees and hides
       // both Cancel and Complete payment. Only a record that identifies
@@ -107,6 +109,8 @@ export default function ConcertBookingDetail({ route, navigation }) {
       if (next && next.bookingId) {
         setBooking(next);
         setError(null);
+        // keep the offline copy of the QR current (a replaced code included)
+        saveTicket(next);
         // The record may have just changed under an open confirmation sheet
         // (this endpoint re-checks stale pending bookings), so a sheet that is
         // no longer valid is taken down rather than left confirmable.
@@ -117,6 +121,16 @@ export default function ConcertBookingDetail({ route, navigation }) {
     } catch (err) {
       if (!mounted.current) return;
       const e = classifyBookingError(err);
+      // No signal and nothing handed in: the saved copy still has the QR.
+      if (!seed && e.kind === 'network') {
+        const saved = await loadSavedTicket(id);
+        if (!mounted.current) return;
+        if (saved) {
+          setBooking(saved);
+          setError(null);
+          return;
+        }
+      }
       // the seeded row is still worth showing; only a cold load is fatal
       if (!seed) {
         setNeedsLogin(e.kind === 'auth');
@@ -133,9 +147,13 @@ export default function ConcertBookingDetail({ route, navigation }) {
     }
   }, [bookingId, seed, getToken]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // On every focus, not just mount: the entry count ("1 of 2 entered") and a
+  // QR that ops replaced only reach the guest through a re-read.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const openUrl = url => {
     if (!url) return;
@@ -351,6 +369,14 @@ export default function ConcertBookingDetail({ route, navigation }) {
             ) : null}
           </View>
         </View>
+
+        {/* ---------------- entry ticket (QR) ---------------- */}
+        {booking.ticket ? (
+          <ConcertTicketCard
+            booking={booking}
+            onOpenQr={b => navigation.navigate('ConcertTicketQR', { booking: b })}
+          />
+        ) : null}
 
         {/* ---------------- tickets ---------------- */}
         <View style={styles.card}>

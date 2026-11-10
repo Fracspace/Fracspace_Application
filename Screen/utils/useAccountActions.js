@@ -9,6 +9,7 @@ import { DeleteAccount } from '../Services/UserApi';
 import { logout as resetHomeState } from '../redux/reducer/homeReducer';
 import { logout as resetProfileState } from '../redux/reducer/profileReducer';
 import { clearAnalyticsUser } from './analytics';
+import { CONCERT_TICKETS_KEY } from '../Version2_O/Concert/utils/concertTicketStore';
 
 /**
  * Logout and Delete Account, shared by the Home side menu and the Profile tab
@@ -29,6 +30,8 @@ export default function useAccountActions() {
     // this saved copy; without clearing it, the next account to log in on this
     // phone was never linked to the token and got no pushes.
     await AsyncStorage.removeItem('fcmToken');
+    // The offline copy of concert tickets (QR codes) belongs to this user only.
+    await AsyncStorage.removeItem(CONCERT_TICKETS_KEY);
     setGlobalState(prev => ({
       ...prev,
       token: '',
