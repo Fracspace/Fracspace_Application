@@ -91,7 +91,11 @@ export default function ConcertBookings({ navigation }) {
       if (!mounted.current) return;
       const data = normalizeBookingList(res?.data);
       // Overwrite the offline copy so a replaced QR is never shown stale.
-      saveTickets(data.bookings);
+      // A one-page first load is the whole list, so anything saved that is
+      // not in it is gone.
+      saveTickets(data.bookings, {
+        complete: nextPage === 1 && (data.pagination.pages || 1) <= 1,
+      });
       setRows(prev => {
         // A refresh re-reads page 1 only. Replacing the whole list would throw
         // away the pages the user scrolled to load, so page 1 is merged over

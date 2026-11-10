@@ -4,7 +4,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import QRCode from 'react-native-qrcode-svg';
 import { BOOKING_THEME as T } from '../utils/concertData';
 import { formatEventShort, formatEventTime } from '../utils/concertFormat';
-import { TICKET_STATE } from '../utils/concertBookingAdapter';
+import { TICKET_STATE, canShowQr } from '../utils/concertBookingAdapter';
 
 /**
  * QR drawing rules from the backend handoff: black on white even in dark mode,
@@ -63,14 +63,7 @@ export function ticketStatusLine(ticket) {
   }
 }
 
-/** True when the QR is worth opening full screen (there is one, and seats are left). */
-export function canShowQr(ticket) {
-  return (
-    !!ticket &&
-    !!ticket.code &&
-    (ticket.state === TICKET_STATE.VALID || ticket.state === TICKET_STATE.PARTIALLY_USED)
-  );
-}
+export { canShowQr };
 
 /**
  * One entry ticket per booking: the show, a state badge, the QR, "Admits N",

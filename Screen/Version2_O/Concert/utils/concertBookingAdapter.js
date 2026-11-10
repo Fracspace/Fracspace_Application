@@ -444,6 +444,52 @@ export function normalizeTicket(apiTicket) {
   };
 }
 
+/** True when the QR is worth showing to the gate (there is one, and seats are left). */
+export function canShowQr(ticket) {
+  return (
+    !!ticket &&
+    !!ticket.code &&
+    (ticket.state === TICKET_STATE.VALID || ticket.state === TICKET_STATE.PARTIALLY_USED)
+  );
+}
+
+// A show stays on the home screen until 12 hours after it starts.
+const SHOW_GRACE_MS = 12 * 60 * 60 * 1000;
+
+/** Usable tickets for shows that have not finished, soonest show first. */
+export function pickActiveTickets(bookings, now = Date.now()) {
+  return (bookings || [])
+    .filter(b => b && canShowQr(b.ticket))
+    .filter(b => {
+      const t = b.eventDate ? Date.parse(b.eventDate) : NaN;
+      return isNaN(t) || t + SHOW_GRACE_MS >= now;
+    })
+    .sort((a, b) => String(a.eventDate || '').localeCompare(String(b.eventDate || '')));
+}
+
+// How long after the start a show counts as "on" for someone who is inside.
+// The API sends no end time, so this is a generous concert length.
+export const SHOW_LIVE_MS = 5 * 60 * 60 * 1000;
+
+/**
+ * Bookings whose holder is inside the venue right now: at least one person
+ * has been checked in at the gate and the show has not ended. Soonest first.
+ * Before the start time this still counts - gates open early - as long as
+ * someone has actually entered.
+ */
+export function pickLiveTickets(bookings, now = Date.now()) {
+  return (bookings || [])
+    .filter(b => {
+      const t = b && b.ticket;
+      if (!t || !t.code || !(t.admitted > 0)) return false;
+      if (t.state !== TICKET_STATE.USED && t.state !== TICKET_STATE.PARTIALLY_USED) return false;
+      const start = b.eventDate ? Date.parse(b.eventDate) : NaN;
+      if (isNaN(start)) return false;
+      return now < start + SHOW_LIVE_MS;
+    })
+    .sort((a, b) => String(a.eventDate || '').localeCompare(String(b.eventDate || '')));
+}
+
 /* ------------------------------------------------------------------ *
  *  The booking record (book / verify / pay / list / get all use this)*
  * ------------------------------------------------------------------ */

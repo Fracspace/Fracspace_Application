@@ -25,6 +25,7 @@ import FastImage from 'react-native-fast-image';
 import EdgeFab from './altaira/FloatingButton';
 import CustomSwiper from '../components/CustomSwiper';
 import ConcertVideoCard from './Concert/components/ConcertVideoCard';
+import HomeTicketShortcut from './Concert/components/HomeTicketShortcut';
 import { normalizeSection } from './Concert/utils/concertAdapter';
 import { profileDetails } from '../redux/reducer/profileReducer';
 import useAccountActions from '../utils/useAccountActions';
@@ -930,6 +931,8 @@ const Categories = carousel?.category
                 </View>
               </View>
             </View>
+
+            <HomeTicketShortcut />
 
             <CustomSwiper
               data={offerCards}

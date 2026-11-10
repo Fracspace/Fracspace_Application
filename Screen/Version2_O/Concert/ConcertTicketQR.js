@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import {
   AppState,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -8,12 +9,19 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import {
-  resetBrightness,
-  setBrightnessLevel,
-} from '@reeq/react-native-device-brightness';
+// Optional: the brightness module is native. An app binary built before it
+// was added (the live app updated over the air) has no native side, and the
+// module throws as soon as it loads - so it is loaded here inside a try and
+// the boost is simply skipped when it is missing. Everything else on this
+// screen is plain JavaScript and works either way.
+let Brightness = null;
+try {
+  Brightness = require('@reeq/react-native-device-brightness');
+} catch (_) {
+  Brightness = null;
+}
 import { formatEventShort } from './utils/concertFormat';
 import {
   TicketQR,
@@ -37,18 +45,31 @@ export default function ConcertTicketQR({ route, navigation }) {
   const ticket = booking?.ticket;
   const show = canShowQr(ticket);
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const size = Math.max(240, Math.min(width - 64, 340));
 
   useEffect(() => {
-    if (!show) return undefined;
+    if (!show || !Brightness) return undefined;
+    const { getBrightnessLevel, resetBrightness, setBrightnessLevel } = Brightness;
+    // Android: the boost is a window override, and resetBrightness hands
+    // control back to the system (auto-brightness included).
+    // iOS: the library's reset goes back to the level from app launch, so the
+    // level from just before the boost is read and put back instead.
+    let before = null;
     const brighten = () => {
       try {
+        if (Platform.OS === 'ios') before = getBrightnessLevel();
         setBrightnessLevel(1);
       } catch (_) {}
     };
     const restore = () => {
       try {
-        resetBrightness();
+        if (Platform.OS === 'ios') {
+          if (typeof before === 'number') setBrightnessLevel(before);
+          before = null;
+        } else {
+          resetBrightness();
+        }
       } catch (_) {}
     };
     brighten();
@@ -67,7 +88,14 @@ export default function ConcertTicketQR({ route, navigation }) {
   const place = [booking?.venue, booking?.city].filter(Boolean).join(', ');
 
   return (
-    <SafeAreaView style={styles.safe}>
+    // Insets from the root provider: SafeAreaView measures itself and reads 0
+    // inside an iOS full-screen modal, which put the close button under the
+    // status bar.
+    <View
+      style={[
+        styles.safe,
+        { paddingTop: Math.max(insets.top, 20), paddingBottom: Math.max(insets.bottom, 12) },
+      ]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.header}>
         <TouchableOpacity
@@ -112,10 +140,12 @@ export default function ConcertTicketQR({ route, navigation }) {
 
       <Text style={styles.hint}>
         {show
-          ? 'Show this QR at the entrance. It works without internet.'
+          ? Brightness
+            ? 'Show this QR at the entrance. It works without internet.'
+            : 'Show this QR at the entrance. Turn your brightness up if the scanner can’t read it.'
           : ' '}
       </Text>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -123,7 +153,7 @@ const INK = '#111111';
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FFFFFF' },
-  header: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 4 },
+  header: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 8 },
   close: {
     width: 40,
     height: 40,
