@@ -1,3 +1,7 @@
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 import {
   TICKET_STATE,
   normalizeBookingRecord,
@@ -68,9 +72,79 @@ describe('booking.ticket and cancel', () => {
     expect(b.canCancel).toBe(false);
   });
 
+  it('home shortcut shows usable tickets for upcoming shows, soonest first', () => {
+    const { pickActiveTickets } = require('../Screen/Version2_O/Concert/utils/concertBookingAdapter');
+    const now = Date.parse('2026-11-10T10:00:00Z');
+    const mk = (id, eventDate, state = 'valid', code = 'C' + id) =>
+      normalizeBookingRecord(confirmed({ bookingId: id, eventDate, ticket: { ...sample, code, state } }));
+    const list = pickActiveTickets(
+      [
+        mk('later', '2026-11-20T14:00:00Z'),
+        mk('soon', '2026-11-14T14:00:00Z'),
+        mk('past', '2026-11-01T14:00:00Z'),
+        mk('used', '2026-11-15T14:00:00Z', 'used'),
+        mk('void', '2026-11-15T14:00:00Z', 'void', null),
+        mk('partly', '2026-11-16T14:00:00Z', 'partially_used'),
+      ],
+      now,
+    );
+    expect(list.map(b => b.bookingId)).toEqual(['soon', 'partly', 'later']);
+  });
+
+  it('live card: someone checked in and the show has not ended', () => {
+    const { pickLiveTickets } = require('../Screen/Version2_O/Concert/utils/concertBookingAdapter');
+    const start = '2026-11-14T14:00:00Z';
+    const mk = (id, state, admitted, eventDate = start) =>
+      normalizeBookingRecord(
+        confirmed({ bookingId: id, eventDate, ticket: { ...sample, code: 'C' + id, state, admitted, remaining: 2 - admitted } }),
+      );
+    const list = [
+      mk('in', 'used', 2),
+      mk('half', 'partially_used', 1),
+      mk('notYet', 'valid', 0),
+      mk('over', 'used', 2, '2026-11-13T14:00:00Z'),
+    ];
+    const during = Date.parse('2026-11-14T16:00:00Z');
+    expect(pickLiveTickets(list, during).map(b => b.bookingId)).toEqual(['in', 'half']);
+    const gatesOpen = Date.parse('2026-11-14T13:00:00Z');
+    expect(pickLiveTickets(list, gatesOpen).map(b => b.bookingId)).toEqual(['in', 'half']);
+    const afterShow = Date.parse('2026-11-14T20:00:00Z');
+    expect(pickLiveTickets(list, afterShow)).toEqual([]);
+  });
+
   it('leaves bookings without a ticket as they were', () => {
     const b = normalizeBookingRecord(confirmed({}));
     expect(b.ticket).toBeNull();
     expect(b.canCancel).toBe(true);
+  });
+});
+
+describe('saved tickets on the phone', () => {
+  const store = require('../Screen/Version2_O/Concert/utils/concertTicketStore');
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  const soon = new Date(Date.now() + 3 * 864e5).toISOString();
+  const mk = (id, extra = {}) =>
+    normalizeBookingRecord(
+      confirmed({ bookingId: id, eventDate: soon, ticket: { ...sample, code: 'C' + id }, ...extra }),
+    );
+
+  beforeEach(() => AsyncStorage.clear());
+
+  it('a complete list drops a booking that was refunded and left the list', async () => {
+    await store.saveTickets([mk('a'), mk('b')]);
+    await store.saveTickets([mk('a')], { complete: true });
+    expect((await store.loadSavedTickets()).map(b => b.bookingId)).toEqual(['a']);
+  });
+
+  it('a cancelled booking overwrites its saved valid ticket', async () => {
+    await store.saveTickets([mk('a')]);
+    await store.saveTicket(mk('a', { status: 'cancelled', ticket: null }));
+    expect(await store.loadSavedTickets()).toEqual([]);
+  });
+
+  it('drops shows that ended more than 30 days ago', async () => {
+    const old = new Date(Date.now() - 40 * 864e5).toISOString();
+    await store.saveTickets([mk('old', { eventDate: old }), mk('new')]);
+    expect((await store.loadSavedTickets()).map(b => b.bookingId)).toEqual(['new']);
   });
 });

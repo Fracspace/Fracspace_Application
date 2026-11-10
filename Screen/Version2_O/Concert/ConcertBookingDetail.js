@@ -229,6 +229,8 @@ export default function ConcertBookingDetail({ route, navigation }) {
       setConfirmOpen(false);
       if (result.booking) {
         setBooking(result.booking);
+        // so the home "Your ticket" bar drops it straight away, even offline
+        saveTicket(result.booking);
       } else {
         // The cancel went through but the response did not echo the booking.
         // Without this the pill still reads CONFIRMED and Cancel Booking stays
