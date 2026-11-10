@@ -1,6 +1,6 @@
 // "My bookings" view of the Stays listing (Stays.dc.html, `isBookings`).
 import React, {useEffect, useState} from 'react';
-import {Image, Linking, StyleSheet, Text, View} from 'react-native';
+import {Alert, Image, Linking, StyleSheet, Text, View} from 'react-native';
 import Animated, {
   interpolateColor,
   useAnimatedProps,
@@ -23,7 +23,8 @@ import {
   STAR_D,
 } from './icons';
 import {countdown} from './data';
-import {reviewBooking, useStayBookings} from '../api/stays';
+import {cancelBooking, getBooking, money, reviewBooking, useStayBookings} from '../api/stays';
+import {errText} from '../api/client';
 import {ErrorCard, Skeleton} from '../api/ui';
 
 const TABS = [
@@ -41,6 +42,62 @@ const directions = b =>
   Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${b.name}, ${b.address}`)}`).catch(
     () => {},
   );
+
+const POLICY =
+  'Cancellation policy: free cancellation up to 72 hours before check-in. Bookings cancelled within 72 hours of check-in are not refunded.';
+
+/**
+ * Cancel with the guest's OK: the refund comes from GET /bookings/:id
+ * (`refundPreview`; list rows don't carry it), so they see it before
+ * confirming. Resolves true once cancelled.
+ */
+async function confirmCancel(b) {
+  let full;
+  try {
+    const r = await getBooking(b.id);
+    full = r?.booking || r;
+  } catch (e) {
+    Alert.alert("Couldn't load this booking", errText(e));
+    return false;
+  }
+  if (!full?.canCancel) {
+    Alert.alert("This booking can't be cancelled", full?.cancellationPolicy?.summary || POLICY);
+    return false;
+  }
+  const rp = full.refundPreview || {};
+  const amount = rp.refundAmount || 0;
+  const head = amount
+    ? `You'll get ₹${money(amount)} back${rp.refundPercent && rp.refundPercent < 100 ? ` (${rp.refundPercent}% refund)` : ''}.`
+    : "Check-in is less than 72 hours away, so you won't get a refund for this booking.";
+  const ok = await new Promise(resolve =>
+    Alert.alert(
+      'Cancel this booking?',
+      `${head}\n\n${POLICY}`,
+      [
+        {text: 'Keep booking', style: 'cancel', onPress: () => resolve(false)},
+        {text: 'Cancel booking', style: 'destructive', onPress: () => resolve(true)},
+      ],
+      {cancelable: true, onDismiss: () => resolve(false)},
+    ),
+  );
+  if (!ok) {
+    return false;
+  }
+  try {
+    const r = await cancelBooking(b.id);
+    const refund = (r?.booking || r)?.refund;
+    Alert.alert(
+      'Booking cancelled',
+      refund?.amount
+        ? `Your refund of ₹${money(refund.amount)} has started${refund.toWallet ? ' and goes to your wallet' : ''}.`
+        : 'Your booking at ' + b.name + ' is cancelled.',
+    );
+    return true;
+  } catch (e) {
+    Alert.alert("Couldn't cancel", errText(e));
+    return false;
+  }
+}
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const META = '#ADA597';
@@ -138,8 +195,19 @@ function IconBtn({label, children, onPress}) {
   );
 }
 
-function Upcoming({b}) {
+function Upcoming({b, onCancelled}) {
   const [more, setMore] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const cancel = () => {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    confirmCancel(b).then(done => {
+      setBusy(false);
+      done && onCancelled();
+    });
+  };
   return (
     <>
       <Animated.View entering={bin} style={styles.bcard}>
@@ -191,13 +259,18 @@ function Upcoming({b}) {
             </React.Fragment>
           ))}
         </View>
-        <More open={more && b.details.length > 0}>
+        <More open={more && (b.details.length > 0 || b.canCancel)}>
           {b.details.map(([k, v, c]) => (
             <View key={k} style={styles.kv}>
               <Text style={styles.kvKey}>{k}</Text>
               <Text style={[styles.kvVal, c && {color: c}]}>{v}</Text>
             </View>
           ))}
+          {b.canCancel ? (
+            <PressScale to={0.97} duration={350} onPress={cancel} accessibilityRole="button" style={styles.cxl}>
+              <Text style={styles.cxlText}>{busy ? 'Checking refund…' : 'Cancel booking'}</Text>
+            </PressScale>
+          ) : null}
         </More>
         <View style={styles.bact}>
           <PressScale
@@ -345,7 +418,7 @@ export default function Bookings({counts: homeCounts, onExplore, onOpenStay}) {
   } else {
     body = list.map((b, i) =>
       bk === 'up' ? (
-        <Upcoming key={b.id || i} b={b} />
+        <Upcoming key={b.id || i} b={b} onCancelled={q.refresh} />
       ) : (
         <Completed key={b.id || i} c={b} onOpenStay={onOpenStay} />
       ),
@@ -452,6 +525,8 @@ const styles = StyleSheet.create({
   kv: {flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 16, ...hairline},
   kvKey: {fontFamily: fonts.regular, fontSize: 12.5, color: META},
   kvVal: {fontFamily: fonts.bold, fontSize: 12.5, color: '#fff'},
+  cxl: {alignItems: 'center', justifyContent: 'center', height: 44, marginHorizontal: 16, marginVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(248,113,113,0.35)'},
+  cxlText: {fontFamily: fonts.bold, fontSize: 13, color: '#F87171'},
   bact: {flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, ...hairline},
   bbtn: {
     flexDirection: 'row',

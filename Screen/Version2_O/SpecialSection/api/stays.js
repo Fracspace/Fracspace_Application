@@ -11,6 +11,8 @@ const P = '/stays';
 
 export const getHome = () => request('GET', `${P}/home`);
 export const getBooking = id => request('GET', `${P}/bookings/${id}`);
+/** → the booking: `refund_initiated` while the refund runs, or `refunded`. */
+export const cancelBooking = (id, reason) => request('POST', `${P}/bookings/${id}/cancel`, {body: reason ? {reason} : {}});
 export const getBookings = tab => request('GET', `${P}/bookings`, {params: {tab}});
 export const likeProperty = (id, liked) => request('POST', `${P}/properties/${id}/like`, {body: {liked}});
 export const reviewBooking = (id, rating, quote) =>
@@ -112,14 +114,18 @@ const STATUS = {
 };
 
 /** Booking object → the upcoming / past booking cards. */
+// PayU's instrument codes, as the guest knows them.
+const METHOD = {upi: 'UPI', dc: 'Debit card', cc: 'Credit card', nb: 'Net banking', emi: 'EMI', wallet: 'Wallet'};
+
 export function toBooking(b) {
   const p = b.property || {};
   const pay = b.payment || {};
   const cin = day(b.checkIn);
   const cout = day(b.checkOut);
   const guests = (b.adults || 0) + (b.children || 0);
+  const code = (pay.instrument || pay.gateway || '').toLowerCase();
   const method =
-    pay.method === 'wallet' ? 'Wallet' : (pay.instrument || pay.gateway || '').replace(/^\w/, c => c.toUpperCase());
+    pay.method === 'wallet' ? 'Wallet' : METHOD[code] || code.replace(/^\w/, c => c.toUpperCase());
   const ref = b.referenceCode || '';
   return {
     id: b.bookingId,
@@ -149,6 +155,7 @@ export function toBooking(b) {
       b.cancellationPolicy?.summary ? ['Cancellation', b.cancellationPolicy.summary] : null,
     ].filter(Boolean),
     canReview: !!b.canReview,
+    canCancel: !!b.canCancel,
     address: p.address || '',
   };
 }
@@ -538,8 +545,9 @@ export function toReviewState(booking, quote) {
 /** The confirmed booking → Success screen's receipt. */
 export function toReceipt(b) {
   const pay = b.payment || {};
+  const code = (pay.instrument || pay.gateway || '').toLowerCase();
   const method =
-    pay.method === 'wallet' ? 'Wallet' : (pay.instrument || pay.gateway || '').replace(/^\w/, c => c.toUpperCase());
+    pay.method === 'wallet' ? 'Wallet' : METHOD[code] || code.replace(/^\w/, c => c.toUpperCase());
   return {
     bookingId: b.referenceCode || b.bookingId,
     txnId: pay.transactionId || '—',
