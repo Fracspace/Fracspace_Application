@@ -14,8 +14,8 @@ import LinearGradient from 'react-native-linear-gradient';
 import Svg, {Defs, RadialGradient, Rect, Stop} from 'react-native-svg';
 import {colors, fonts, ls} from './theme';
 import {E, LoopGate, Nudge, PressScale, kf, useLinger, useLoop, useReducedMotion, useToggle} from './anim';
-import {BackIcon, Eyebrow, GlassButton} from './HubBits';
-import {heroSlides, images} from './data';
+import {BackIcon, Eyebrow, GlassButton, Tag} from './HubBits';
+import {heroSlides, images, shopComingSoon} from './data';
 import {useRenderCount} from './perf';
 
 export const HERO_H = 476;
@@ -143,10 +143,17 @@ const Copy = React.memo(function Copy({slide, on, onCta}) {
           <Text style={styles.sub}>{slide.sub}</Text>
         </CopyItem>
         <CopyItem on={on} index={3}>
-          <PressScale to={0.94} onPress={cta} style={styles.cta} accessibilityRole="button">
-            <Text style={styles.ctaText}>{slide.cta}</Text>
-            <Nudge style={styles.ctaText} />
-          </PressScale>
+          {shopComingSoon && slide.to === 'IvaShop' ? (
+            // IVA Shop isn't live: the same tag as the Shop card, nothing to tap.
+            <View style={styles.soon} accessible accessibilityLabel="Shop Iva, coming soon">
+              <Tag>COMING SOON</Tag>
+            </View>
+          ) : (
+            <PressScale to={0.94} onPress={cta} style={styles.cta} accessibilityRole="button">
+              <Text style={styles.ctaText}>{slide.cta}</Text>
+              <Nudge style={styles.ctaText} />
+            </PressScale>
+          )}
         </CopyItem>
       </View>
     </LoopGate>
@@ -300,6 +307,7 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
     shadowOffset: {width: 0, height: 10},
   },
+  soon: {height: 46, justifyContent: 'center'},
   ctaText: {fontFamily: fonts.bold, fontSize: 14, color: colors.ink},
   pager: {
     position: 'absolute',
