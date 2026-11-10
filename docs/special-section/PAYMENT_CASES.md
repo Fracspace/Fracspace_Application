@@ -255,3 +255,14 @@ Booking `sbkg_MlwziBQjmuY-`, attempt `ST261110U551Q6W1`:
 10:01:23.474 clean-up → GET booking: status=confirmed pay=success → banner "Booking confirmed"
 ```
 The server confirmed the UPI payment on its own (PayU callback) and the app showed it on reopen (P6 / R1).
+
+### T6 · UPI declined in Google Pay, then PayU closed — 2026-11-10 10:02 IST, Android — ✅ app / ❌ S3
+Booking `sbkg_TLpM3NpEfR51`, attempt `ST261110VAZ2H6XV`:
+```
+10:02:32.865 POST /pay → pending_payment
+             declined in Google Pay → back on PayU's page (retry offered inside the checkout)
+10:04:48.368 PayU closed → onPaymentCancel
+10:04:48.904 POST /payment-result → next=pending (server)   → app shows "Payment cancelled" at once
+```
+Unlike the declined card (T6c → `failed`), a UPI-app decline leaves the server at `pending` until the hold ends: same
+S3 gap as T1. Re-run 10:18 (`sbkg_0PssdC_hHg17`) after moving outcomes to the top banner: same server answer.
