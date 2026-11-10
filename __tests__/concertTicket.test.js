@@ -150,27 +150,21 @@ describe('saved tickets on the phone', () => {
 });
 
 describe('home banner after Categories', () => {
-  const { isConcertLive } = require('../Screen/Version2_O/Concert/utils/concertAdapter');
-  const section = starts => ({
-    enabled: true,
-    concert: { cities: starts.map((s, i) => ({ id: 'c' + i, startsAt: s })) },
-  });
-  const now = Date.parse('2026-11-14T20:00:00Z');
+  const { isConcertHomeOn } = require('../Screen/Version2_O/Concert/utils/concertAdapter');
+  const section = homeCard => ({ enabled: true, concert: { id: 'c1', homeCard } });
 
   it('waits until the concert section has loaded', () => {
-    expect(isConcertLive(null, now)).toBeNull();
+    expect(isConcertHomeOn(null)).toBeNull();
   });
-  it('promotes the concert while any city is still to come', () => {
-    expect(isConcertLive(section(['2026-11-10T14:00:00Z', '2026-11-20T14:00:00Z']), now)).toBe(true);
+  it('promotes the concert while the dashboard has the home card on', () => {
+    expect(isConcertHomeOn(section({ enabled: true }))).toBe(true);
+    expect(isConcertHomeOn(section(undefined))).toBe(true);
   });
-  it('keeps it during a show that has just started', () => {
-    expect(isConcertLive(section(['2026-11-14T16:00:00Z']), now)).toBe(true);
+  it('goes back to Altaira when the home card is turned off', () => {
+    expect(isConcertHomeOn(section({ enabled: false }))).toBe(false);
   });
-  it('goes back to Altaira once every show is over', () => {
-    expect(isConcertLive(section(['2026-11-10T14:00:00Z', '2026-11-13T14:00:00Z']), now)).toBe(false);
-  });
-  it('goes back to Altaira when the section is off or has no concert', () => {
-    expect(isConcertLive({ enabled: false, concert: null }, now)).toBe(false);
-    expect(isConcertLive({ enabled: true, concert: null }, now)).toBe(false);
+  it('goes back to Altaira when the section is off, empty or failed to load', () => {
+    expect(isConcertHomeOn({ enabled: false, concert: null })).toBe(false);
+    expect(isConcertHomeOn({ enabled: true, concert: null })).toBe(false);
   });
 });

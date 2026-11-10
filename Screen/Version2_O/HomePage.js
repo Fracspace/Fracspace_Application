@@ -26,7 +26,7 @@ import EdgeFab from './altaira/FloatingButton';
 import CustomSwiper from '../components/CustomSwiper';
 import ConcertVideoCard from './Concert/components/ConcertVideoCard';
 import HomeTicketShortcut from './Concert/components/HomeTicketShortcut';
-import { isConcertLive, normalizeSection } from './Concert/utils/concertAdapter';
+import { isConcertHomeOn, normalizeSection } from './Concert/utils/concertAdapter';
 import { profileDetails } from '../redux/reducer/profileReducer';
 import useAccountActions from '../utils/useAccountActions';
 import DeleteAccountModal from '../components/DeleteAccountModal';
@@ -974,13 +974,14 @@ const Categories = carousel?.category
               </ScrollView> */}
 
             </View>
-            {/* While the concert is on, this banner opens it. Once every city's
-                show is over (or the dashboard turns the section off) it goes
-                back to the Altaira banner. Nothing renders until the concert
-                section has loaded, so neither banner flashes. */}
-            {isConcertLive(concertSection) === null ? (
+            {/* Same switch as the floating video card: while the dashboard has
+                the concert's home card on, this banner opens the concert; when
+                it is turned off it goes back to the Altaira banner. Nothing
+                renders until the concert section has loaded, so neither banner
+                flashes. */}
+            {isConcertHomeOn(concertSection) === null ? (
               <View style={{ paddingTop: 20, height: 130 }} />
-            ) : isConcertLive(concertSection) ? (
+            ) : isConcertHomeOn(concertSection) ? (
               <TouchableOpacity onPress={() => {
                 navigation.navigate('ConcertDetails');
               }} style={{ paddingTop: 20, paddingHorizontal: 20 }}>
@@ -1747,9 +1748,7 @@ const Categories = carousel?.category
         {carousel?.edgeTab &&
           <EdgeFab scrollY={scrollY} />
         }
-        {concertSection?.enabled &&
-          !!concertSection?.concert &&
-          concertSection.concert?.homeCard?.enabled !== false && (
+        {isConcertHomeOn(concertSection) && (
             <ConcertVideoCard
               scrollY={scrollY}
               concert={concertSection.concert}
