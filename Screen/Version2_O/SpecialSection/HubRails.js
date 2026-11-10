@@ -32,11 +32,7 @@ function SectionHead({tag, title, sub, link, onLink, soon}) {
           <Text style={type.h2}>{title}</Text>
           <Text style={[type.muted, {fontSize: 12.5}]}>{sub}</Text>
         </View>
-        {soon ? (
-          <View style={styles.link}>
-            <Tag>COMING SOON</Tag>
-          </View>
-        ) : (
+        {soon ? null : (
           <Pressable onPress={onLink} style={styles.link} accessibilityRole="link">
             <Text style={type.link}>{link}</Text>
             <Nudge style={type.link} />
@@ -251,28 +247,14 @@ function Stepper({qty, onInc, onDec, name}) {
   );
 }
 
-/** Coming-soon product card: same layout, dimmed, nothing to tap or add. */
-function IvaSoonCard({product}) {
+/** Shown instead of the product rail until IVA Shop launches (no mock products). */
+function IvaSoonCard() {
   return (
-    <View
-      style={[styles.icard, styles.dim]}
-      accessible
-      accessibilityLabel={`${product.name}, coming soon`}
-      accessibilityState={{disabled: true}}>
-      <View style={styles.itile}>
-        {product.img ? (
-          <Image source={product.img} resizeMode="cover" style={styles.fill} />
-        ) : (
-          <View style={styles.phIva}>
-            <Text style={styles.phIvaText}>IVA</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[type.muted, {fontSize: 11, marginTop: 2}]}>{product.cat}</Text>
-      <Text style={styles.iname}>{product.name}</Text>
-      <View style={styles.irow}>
-        <Text style={styles.iprice}>₹{product.price}</Text>
-      </View>
+    <View style={styles.soonCard} accessible accessibilityLabel="Iva Essentials, coming soon">
+      <LinearGradient colors={[colors.cardTop, colors.cardBottom]} style={StyleSheet.absoluteFill} />
+      <Tag>COMING SOON</Tag>
+      <Text style={styles.soonTitle}>Iva Essentials are on their way</Text>
+      <Text style={styles.soonText}>Spiritual décor, puja kits & artisanal essentials, curated for you.</Text>
     </View>
   );
 }
@@ -312,29 +294,30 @@ export const IvaEssentials = React.memo(function IvaEssentials({qty, setQty, onO
         onLink={onOpenShop}
         soon={shopComingSoon}
       />
-      <Animated.ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={ICARD_W + ICARD_GAP}
-        decelerationRate="fast"
-        contentContainerStyle={styles.irail}>
-        {ivaProducts.map(p => {
-          if (shopComingSoon) {
-            return <IvaSoonCard key={p.id} product={p} />;
-          }
-          const q = qty[p.id] || 0;
-          return (
-            <IvaCard
-              key={p.id}
-              product={p}
-              qty={q}
-              onInc={() => setQty(p.id, q + 1)}
-              onDec={() => setQty(p.id, q - 1)}
-              onOpen={onOpenShop}
-            />
-          );
-        })}
-      </Animated.ScrollView>
+      {shopComingSoon ? (
+        <IvaSoonCard />
+      ) : (
+        <Animated.ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={ICARD_W + ICARD_GAP}
+          decelerationRate="fast"
+          contentContainerStyle={styles.irail}>
+          {ivaProducts.map(p => {
+            const q = qty[p.id] || 0;
+            return (
+              <IvaCard
+                key={p.id}
+                product={p}
+                qty={q}
+                onInc={() => setQty(p.id, q + 1)}
+                onDec={() => setQty(p.id, q - 1)}
+                onOpen={onOpenShop}
+              />
+            );
+          })}
+        </Animated.ScrollView>
+      )}
     </View>
   );
 });
@@ -401,7 +384,17 @@ const styles = StyleSheet.create({
   fill: {width: '100%', height: '100%'},
   head: {gap: 8, paddingHorizontal: 20, marginBottom: 14},
   headRow: {flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between'},
-  dim: {opacity: 0.45},
+  soonCard: {
+    marginHorizontal: 20,
+    gap: 10,
+    padding: 18,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  soonTitle: {fontFamily: fonts.bold, fontSize: 17, color: colors.cream},
+  soonText: {fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 12.5 * 1.5, color: colors.muted},
   link: {flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44},
   srail: {gap: CARD_GAP, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8},
   scard: {
