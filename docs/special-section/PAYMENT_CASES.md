@@ -246,3 +246,12 @@ Booking `sbkg_6mul92NFipV6` (Dreamscape, ₹1.02), attempt `ST261110E91YKLZG`. l
 09:57:33.971 POST /payment-result → next=confirmed status=confirmed pay=success
 ```
 Android is unblocked; UPI intent works (P4).
+
+### T5 · UPI (Google Pay) paid, Fracspace killed before returning — 2026-11-10 10:00 IST, Android — ✅
+Booking `sbkg_MlwziBQjmuY-`, attempt `ST261110U551Q6W1`:
+```
+10:00:38.949 POST /pay → pending_payment → paid in Google Pay, Fracspace swiped away (no SDK event reached the app)
+10:01:17.205 Fracspace reopened (new process)
+10:01:23.474 clean-up → GET booking: status=confirmed pay=success → banner "Booking confirmed"
+```
+The server confirmed the UPI payment on its own (PayU callback) and the app showed it on reopen (P6 / R1).
