@@ -990,8 +990,9 @@ const Categories = carousel?.category
             ) : (
               <TouchableOpacity onPress={() => {
                 navigation.navigate('LableProperty');
-              }} style={{ paddingTop: 20, paddingHorizontal: 20 }}>
-                <Image resizeMethod="resize" resizeMode='contain' source={{ uri: "https://fracspace-updates.s3.ap-south-1.amazonaws.com/appImages/Altaira_Banner.png" }} style={{ width: '100%', height: 110, borderRadius: 10}} />
+              }} style={{ paddingTop: 16, paddingHorizontal: 20 }}>
+                {/* Sized to the image's own shape (1122x300) so there is no empty band above or below it. */}
+                <Image resizeMethod="resize" resizeMode='cover' source={{ uri: "https://fracspace-updates.s3.ap-south-1.amazonaws.com/appImages/Altaira_Banner.png" }} style={{ width: '100%', aspectRatio: 1122 / 300, borderRadius: 10 }} />
               </TouchableOpacity>
             )}
 
@@ -1000,7 +1001,7 @@ const Categories = carousel?.category
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginTop: 20,
+                marginTop: 6,
               }}>
               <Text style={[styles.mostCommonFaqsTypo, { paddingVertical: 15 }]}>
                 Available Properties
