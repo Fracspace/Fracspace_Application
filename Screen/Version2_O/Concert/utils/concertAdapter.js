@@ -356,3 +356,23 @@ export function normalizeSection(payload, wantedId) {
 }
 
 export default normalizeSection;
+
+// A show counts as over this long after its start (the API sends no end time).
+const CONCERT_OVER_AFTER_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Whether the home screen should still promote the concert.
+ *   null  - not loaded yet (render nothing, so no banner flashes)
+ *   false - the section is off, there is no concert, or every city's show
+ *           has finished
+ *   true  - at least one city's show is still to come (or no dates are known)
+ */
+export function isConcertLive(section, now = Date.now()) {
+  if (!section) return null;
+  if (!section.enabled || !section.concert) return false;
+  const starts = (section.concert.cities || [])
+    .map(c => Date.parse(c && c.startsAt))
+    .filter(n => !isNaN(n));
+  if (!starts.length) return true;
+  return now < Math.max(...starts) + CONCERT_OVER_AFTER_MS;
+}
