@@ -174,8 +174,8 @@ const PayNote = memo(function PayNote({note, top, onClose}) {
       <Pressable onPress={onClose} accessibilityRole="alert" style={styles.noteIn}>
         <View style={[styles.noteDot, {backgroundColor: shown.warn ? colors.coral : colors.gold}]} />
         <View style={styles.noteBody}>
-          <Text style={styles.noteT}>{shown.title}</Text>
-          <Text style={styles.noteS}>{shown.text}</Text>
+          {shown.title ? <Text style={styles.noteT}>{shown.title}</Text> : null}
+          <Text style={shown.title ? styles.noteS : styles.noteT}>{shown.text}</Text>
         </View>
         <Text style={styles.noteX}>✕</Text>
       </Pressable>
@@ -220,8 +220,15 @@ export default function StayReview({navigation, route}) {
   const [kids, setKids] = useState(hs ? hs.children : Math.min(maxKids, params?.trip?.children || 0));
   const rooms = live ? roomsFor(adults, kids, perRoom) : 1;
   const [notice, setNotice] = useState(null);
-  const [note, setNote] = useState(null); // payment outcome banner: {title, text, warn}
+  const [note, setNote] = useState(null); // the top banner: {title?, text, warn}
   const closeNote = useCallback(() => setNote(null), []);
+  // Every other message (hold expired, an error from the server) shows in the same banner.
+  useEffect(() => {
+    if (notice) {
+      setNote({text: notice, warn: true});
+      setNotice(null);
+    }
+  }, [notice]);
   const [code, setCode] = useState(hs?.offerCode || '');
   const [flip, setFlip] = useState(0);
   const [cal, setCal] = useState(false);
@@ -420,7 +427,6 @@ export default function StayReview({navigation, route}) {
       let r = UNPAID.has(event) && nextOf(start) === 'pending' ? {...start, next: 'failed'} : start;
       const until = Date.now() + POLL_MS;
       while (nextOf(r) === 'pending' && Date.now() < until && mounted.current) {
-        setNotice('Confirming your payment…');
         await wait(r.pollAfterMs || 3000);
         r = await paymentStatus(hold.id).catch(() => r); // a network blip: keep waiting
       }
@@ -736,7 +742,6 @@ export default function StayReview({navigation, route}) {
             </Stage>
           ) : null}
 
-          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
           <Stage t={t} i={4} style={[styles.cxl, cxl.free ? styles.cxlOk : styles.cxlNo]}>
             <View style={[styles.cdot, {backgroundColor: cxl.color}]} />
@@ -855,7 +860,6 @@ const styles = StyleSheet.create({
   noteT: {fontFamily: fonts.bold, fontSize: 14, color: colors.cream},
   noteS: {fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.muted, marginTop: 2},
   noteX: {fontSize: 13, color: colors.muted, paddingLeft: 4},
-  notice: {fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 18, color: '#FCA5A5', paddingHorizontal: 4},
   cRow: {flexDirection: 'row', gap: 10},
   cInput: {
     flex: 1,
