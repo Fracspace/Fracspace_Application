@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -20,6 +21,8 @@ import {
   bookingStatusMeta,
   normalizeBookingList,
 } from './utils/concertBookingAdapter';
+import ConcertTicketCard from './components/ConcertTicketCard';
+import { loadSavedTickets, saveTickets } from './utils/concertTicketStore';
 
 const PAGE_SIZE = 20;
 
@@ -37,6 +40,10 @@ const TONE = {
  * pending rows against PayU while serving this list, so a booking whose
  * callback was lost can come back confirmed here. A cached list would hide
  * exactly the case this screen exists to surface.
+ *
+ * Confirmed bookings show their entry ticket (QR). Every successful load is
+ * also saved on the phone, and when the network fails the saved tickets are
+ * shown instead, so the QR opens at a venue with no signal.
  */
 export default function ConcertBookings({ navigation }) {
   useBookingStatusBar();
@@ -49,6 +56,8 @@ export default function ConcertBookings({ navigation }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [needsLogin, setNeedsLogin] = useState(false);
+  // Showing the saved copy because the last load could not reach the server.
+  const [offline, setOffline] = useState(false);
 
   // Guards a second page request while one is already in flight; onEndReached
   // fires repeatedly as the list settles.
@@ -81,6 +90,8 @@ export default function ConcertBookings({ navigation }) {
       });
       if (!mounted.current) return;
       const data = normalizeBookingList(res?.data);
+      // Overwrite the offline copy so a replaced QR is never shown stale.
+      saveTickets(data.bookings);
       setRows(prev => {
         // A refresh re-reads page 1 only. Replacing the whole list would throw
         // away the pages the user scrolled to load, so page 1 is merged over
@@ -114,9 +125,23 @@ export default function ConcertBookings({ navigation }) {
       setPages(data.pagination.pages || 1);
       setError(null);
       setNeedsLogin(false);
+      setOffline(false);
     } catch (err) {
       if (!mounted.current) return;
       const e = classifyBookingError(err);
+      // No signal: fall back to the tickets saved on the phone.
+      if (e.kind === 'network' && mode !== 'more') {
+        const saved = await loadSavedTickets();
+        if (!mounted.current) return;
+        if (saved.length || mode === 'silent') {
+          setOffline(true);
+          if (mode !== 'silent') {
+            setRows(prev => (prev.length ? prev : saved));
+            setError(null);
+          }
+          return;
+        }
+      }
       // a failed "load more" must not wipe the rows already on screen
       if (mode !== 'more' && mode !== 'silent') {
         setRows([]);
@@ -154,6 +179,44 @@ export default function ConcertBookings({ navigation }) {
     }, [load]),
   );
 
+  // Back from the background (e.g. after WhatsApp): re-read so a replaced QR
+  // or a new entry count shows up without leaving the screen.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => {
+      if (s === 'active' && loadedOnce.current) load({ nextPage: 1, mode: 'silent' });
+    });
+    return () => sub.remove();
+  }, [load]);
+
+  // "Booking 1 of 2" when one account holds several ticketed bookings for the
+  // same show - each payment is its own QR, never merged.
+  const positions = useMemo(() => {
+    const groups = {};
+    rows.forEach(r => {
+      if (!r.ticket) return;
+      const k = (r.concertId || '') + '|' + (r.eventDate || '');
+      (groups[k] = groups[k] || []).push(r);
+    });
+    const out = {};
+    Object.keys(groups).forEach(k => {
+      const g = groups[k]
+        .slice()
+        .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+      g.forEach((r, i) => {
+        out[r.bookingId] = { index: i + 1, total: g.length };
+      });
+    });
+    return out;
+  }, [rows]);
+
+  const openDetail = item =>
+    navigation.navigate('ConcertBookingDetail', {
+      bookingId: item.bookingId,
+      booking: item,
+    });
+
+  const openQr = item => navigation.navigate('ConcertTicketQR', { booking: item });
+
   const onEndReached = () => {
     if (loading || loadingMore || refreshing) return;
     if (page >= pages) return;
@@ -161,6 +224,16 @@ export default function ConcertBookings({ navigation }) {
   };
 
   const renderRow = ({ item }) => {
+    if (item.ticket) {
+      return (
+        <ConcertTicketCard
+          booking={item}
+          position={positions[item.bookingId]}
+          onPress={() => openDetail(item)}
+          onOpenQr={openQr}
+        />
+      );
+    }
     const meta = bookingStatusMeta(item.status);
     const tone = TONE[meta.tone] || TONE.muted;
     const summary = item.items
@@ -232,6 +305,15 @@ export default function ConcertBookings({ navigation }) {
         <Text style={styles.headerTitle}>My tickets</Text>
         <View style={{ width: 48 }} />
       </View>
+
+      {offline && !loading ? (
+        <View style={styles.offline}>
+          <Icon name="cloud-offline-outline" size={14} color={T.textMuted} />
+          <Text style={styles.offlineText}>
+            Offline — showing your saved tickets. QR codes still work.
+          </Text>
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={styles.centre}>
@@ -313,6 +395,18 @@ const styles = StyleSheet.create({
   headerTitle: { color: T.text, fontFamily: 'WorkSans-Bold', fontSize: 17 },
 
   list: { paddingHorizontal: 22, paddingTop: 6, paddingBottom: 28 },
+  offline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 22,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  offlineText: { flex: 1, color: T.textMuted, fontFamily: 'WorkSans-Regular', fontSize: 12 },
 
   card: {
     backgroundColor: T.surface,

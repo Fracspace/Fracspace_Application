@@ -146,7 +146,7 @@ const handleProfile = async (emailId, tokenid) => {
       
       console.log('Invalid/expired token detected → logging out');
       setToken('');
-      await AsyncStorage.multiRemove(['mytoken', 'Email']);
+      await AsyncStorage.multiRemove(['mytoken', 'Email', 'concert_tickets_v1']);
       
       // Do NOT clear pendingDeepLink here - we want to keep it for after re-login
     } else {

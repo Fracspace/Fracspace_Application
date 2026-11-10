@@ -131,12 +131,26 @@ export default function ConcertBookingSuccess({ route, navigation }) {
         ) : null}
 
         <Text style={styles.note}>
-          Your confirmation is on its way by email and WhatsApp. Keep your
-          booking reference handy at the venue.
+          Your confirmation is on its way by email and WhatsApp. Your entry QR
+          is in My tickets and opens even without internet.
         </Text>
       </ScrollView>
 
       <View style={styles.footer}>
+        {booking?.bookingId ? (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            // No seed: the detail screen reads the booking fresh, because the
+            // ticket (QR) can be issued a moment after the payment response.
+            onPress={() =>
+              navigation.navigate('ConcertBookingDetail', { bookingId: booking.bookingId })
+            }
+            style={styles.ticketBtn}
+            accessibilityRole="button">
+            <Icon name="qr-code-outline" size={17} color={T.gold} />
+            <Text style={styles.ticketBtnText}>View my ticket</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity activeOpacity={0.9} onPress={goHome}>
           <GradientView
             colors={[T.goldLight, T.gold, T.goldDark]}
@@ -269,4 +283,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaText: { color: '#1A1206', fontFamily: 'WorkSans-Bold', fontSize: 15.5 },
+  ticketBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: T.borderActive,
+    marginBottom: 10,
+  },
+  ticketBtnText: { color: T.gold, fontFamily: 'WorkSans-SemiBold', fontSize: 15 },
 });
