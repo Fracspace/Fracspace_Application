@@ -236,3 +236,13 @@ The Android SDK (unlike iOS) asks for `quickPayEvent` and waits for it, so the c
 and the app shows "Payment could not start". There is no app-side switch for quick pay in the bridge
 (`enableSavedCard` is only saved cards). **For the backend:** sign `quickPayEvent` (and `send_sign_in_otp`, seen on
 iOS in T6c), ideally every CheckoutPro hash name, the same way as the others.
+
+### Android · UPI (Google Pay) payment, returned to the app — 2026-11-10 09:56 IST, OnePlus CPH2643 — ✅
+Booking `sbkg_6mul92NFipV6` (Dreamscape, ₹1.02), attempt `ST261110E91YKLZG`. logcat:
+```
+09:56:52.975 POST /pay → pending_payment
+09:56:53.886 hash quickPayEvent → 200 (backend fix in; no "hash failed" lines in the whole run)
+09:57:33.272 PayU onPaymentSuccess (paid in Google Pay, came back)
+09:57:33.971 POST /payment-result → next=confirmed status=confirmed pay=success
+```
+Android is unblocked; UPI intent works (P4).
