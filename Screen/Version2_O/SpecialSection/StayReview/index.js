@@ -152,6 +152,37 @@ function Spinner() {
   return <Animated.View style={[styles.spin, a]} />;
 }
 
+/** A payment outcome that drops in at the top; tap to close, goes by itself after 6 s. */
+const PayNote = memo(function PayNote({note, top, onClose}) {
+  const on = !!note;
+  const [shown, setShown] = useState(note);
+  useEffect(() => {
+    if (note) {
+      setShown(note);
+      const id = setTimeout(onClose, 6000);
+      return () => clearTimeout(id);
+    }
+  }, [note, onClose]);
+  const y = useTo(on ? 0 : -24, 500, E.spring);
+  const o = useTo(on ? 1 : 0, 250);
+  const a = useAnimatedStyle(() => ({opacity: o.value, transform: [{translateY: y.value}]}));
+  if (!shown) {
+    return null;
+  }
+  return (
+    <Animated.View pointerEvents={on ? 'auto' : 'none'} style={[styles.note, {top}, a]}>
+      <Pressable onPress={onClose} accessibilityRole="alert" style={styles.noteIn}>
+        <View style={[styles.noteDot, {backgroundColor: shown.warn ? colors.coral : colors.gold}]} />
+        <View style={styles.noteBody}>
+          <Text style={styles.noteT}>{shown.title}</Text>
+          <Text style={styles.noteS}>{shown.text}</Text>
+        </View>
+        <Text style={styles.noteX}>✕</Text>
+      </Pressable>
+    </Animated.View>
+  );
+});
+
 export default function StayReview({navigation, route}) {
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
@@ -189,6 +220,8 @@ export default function StayReview({navigation, route}) {
   const [kids, setKids] = useState(hs ? hs.children : Math.min(maxKids, params?.trip?.children || 0));
   const rooms = live ? roomsFor(adults, kids, perRoom) : 1;
   const [notice, setNotice] = useState(null);
+  const [note, setNote] = useState(null); // payment outcome banner: {title, text, warn}
+  const closeNote = useCallback(() => setNote(null), []);
   const [code, setCode] = useState(hs?.offerCode || '');
   const [flip, setFlip] = useState(0);
   const [cal, setCal] = useState(false);
@@ -405,19 +438,22 @@ export default function StayReview({navigation, route}) {
       if (next === 'pending') {
         hold.settle('pending', r?.booking?.holdExpiresAt);
         after.current = 'wait';
-        setNotice("We'll notify you once your payment is confirmed. Tap Proceed to pay to check again.");
+        setNotice(null);
+        setNote({title: 'Checking your payment', text: "We'll let you know once it's confirmed. Tap Proceed to pay to check again."});
       } else if (next === 'expired') {
         hold.expire();
       } else if (next === 'cancelled') {
         hold.settle('cancelled');
         after.current = 'closed';
-        setNotice('This booking was cancelled. Check My bookings for details.');
+        setNotice(null);
+        setNote({title: 'Booking cancelled', text: 'This booking was cancelled. Check My bookings for details.', warn: true});
       } else {
         hold.settle('failed');
-        setNotice(
+        setNotice(null);
+        setNote(
           event === 'onPaymentCancel'
-            ? 'Payment cancelled. Tap Proceed to pay to try again.'
-            : "Payment didn't go through. Tap Proceed to pay to try again.",
+            ? {title: 'Payment cancelled', text: 'You can try again with Proceed to pay.', warn: true}
+            : {title: "Payment didn't go through", text: 'Try again with Proceed to pay, or pick another method.', warn: true},
         );
       }
     },
@@ -431,6 +467,7 @@ export default function StayReview({navigation, route}) {
     setPhase('busy');
     if (live) {
       setNotice(null);
+      setNote(null);
       if (after.current === 'wait') {
         paymentStatus(hold.id)
           .then(r => outcome(r))
@@ -778,6 +815,7 @@ export default function StayReview({navigation, route}) {
           />
         ) : null}
 
+        <PayNote note={note} top={insets.top + 8} onClose={closeNote} />
         <Grain opacity={0.07} />
       </LoopGate>
     </View>
@@ -796,6 +834,27 @@ const styles = StyleSheet.create({
   heldTLow: {color: '#FCA5A5'},
   green: {color: '#6EE7A0'},
   red: {color: '#FCA5A5'},
+  note: {position: 'absolute', left: 16, right: 16, zIndex: 60, elevation: 60},
+  noteIn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    shadowColor: '#000',
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    shadowOffset: {width: 0, height: 8},
+  },
+  noteDot: {width: 8, height: 8, borderRadius: 4},
+  noteBody: {flex: 1},
+  noteT: {fontFamily: fonts.bold, fontSize: 14, color: colors.cream},
+  noteS: {fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.muted, marginTop: 2},
+  noteX: {fontSize: 13, color: colors.muted, paddingLeft: 4},
   notice: {fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 18, color: '#FCA5A5', paddingHorizontal: 4},
   cRow: {flexDirection: 'row', gap: 10},
   cInput: {
