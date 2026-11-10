@@ -18,7 +18,6 @@ import {
   ChevronIcon,
   ClockIcon,
   DirectionsIcon,
-  DownloadIcon,
   HeadsetIcon,
   STAR_D,
 } from './icons';
@@ -358,9 +357,6 @@ function Completed({c, onOpenStay}) {
         <PressScale to={0.95} duration={400} onPress={() => onOpenStay(c.stayId)} style={[styles.bbtn, styles.grow]}>
           <Text style={styles.bbtnText}>Book again</Text>
         </PressScale>
-        <IconBtn label="Download invoice">
-          <DownloadIcon />
-        </IconBtn>
       </View>
     </Animated.View>
   );
