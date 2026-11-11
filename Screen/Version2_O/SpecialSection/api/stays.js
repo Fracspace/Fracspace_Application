@@ -431,7 +431,7 @@ export const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
 
 // One booking can hold several rooms of the same type; the server allows
 // up to `rooms × maxAdults` adults and `rooms × maxChildren` children.
-export const MAX_ROOMS = 5;
+export const MAX_ROOMS = 4; // the server refuses more ("At most 4 rooms per booking")
 /** Rooms of `suite` needed for these guests (1 … MAX_ROOMS). */
 export function roomsFor(adults, children, suite) {
   const a = Math.ceil((adults || 1) / (suite?.maxAdults || 2));
