@@ -198,7 +198,7 @@ export default function StayReview({navigation, route}) {
     () => {
       const d = defaultDates();
       const trip = params?.trip;
-      return trip && day(trip.checkIn) >= d.cin ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : d;
+      return trip?.checkIn && day(trip.checkIn) >= d.cin ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : d;
     },
     [params],
   );
@@ -230,6 +230,8 @@ export default function StayReview({navigation, route}) {
     }
   }, [notice]);
   const [code, setCode] = useState(hs?.offerCode || '');
+  const codeRef = useRef(code);
+  codeRef.current = code;
   const [flip, setFlip] = useState(0);
   const [cal, setCal] = useState(false);
   const [view, setView] = useState(new Date(first.cin.getFullYear(), first.cin.getMonth(), 1));
@@ -413,6 +415,13 @@ export default function StayReview({navigation, route}) {
     mounted.current = false;
   }, []);
   const paidOk = useCallback(b => {
+    // The claimed coupon is spent once a booking with it is paid.
+    const used = codeRef.current.trim().toUpperCase();
+    if (used) {
+      AsyncStorage.getItem('ss:coupon')
+        .then(c => c && c.toUpperCase() === used && AsyncStorage.removeItem('ss:coupon'))
+        .catch(() => {});
+    }
     setNotice(null);
     setPaid(toReceipt(b));
     setPhase('anim');

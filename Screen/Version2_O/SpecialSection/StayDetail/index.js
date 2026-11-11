@@ -246,7 +246,7 @@ function bookAgain(pending) {
 
 export default function StayDetail({navigation, route}) {
   const stayId = route?.params?.stayId;
-  const trip = route?.params?.trip; // {checkIn, checkOut, adults, children} from the search
+  const trip = route?.params?.trip; // {adults, children, checkIn?, checkOut?} from the search
   const q = useStayDetail(stayId, trip);
   const stay = q.data;
   const {height} = useWindowDimensions();
@@ -352,7 +352,7 @@ export default function StayDetail({navigation, route}) {
         return;
       }
       // The search's dates, unless they have passed since (then tomorrow).
-      const dated = trip && day(trip.checkIn) >= defaultDates().cin;
+      const dated = trip?.checkIn && day(trip.checkIn) >= defaultDates().cin;
       const {cin, cout} = dated ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : defaultDates();
       // The search's guests: as many rooms of this suite as they need.
       const want = {a: trip?.adults || 1, c: cur.maxChildren ? trip?.children || 0 : 0};
@@ -360,7 +360,16 @@ export default function StayDetail({navigation, route}) {
       const adults = Math.min(want.a, rooms * (cur.maxAdults || 2));
       const children = Math.min(want.c, rooms * (cur.maxChildren || 0));
       const couponCode = await AsyncStorage.getItem('ss:coupon').catch(() => null);
-      const res = await createHold({propertyId: stay.id, roomTypeId: cur.id, cin, cout, rooms, adults, children, couponCode, name: stay.name});
+      const hold = c => createHold({propertyId: stay.id, roomTypeId: cur.id, cin, cout, rooms, adults, children, couponCode: c, name: stay.name});
+      // A claimed coupon the server turns down (used, expired) must not block
+      // the booking: forget it and hold the room without it.
+      const res = await hold(couponCode).catch(e => {
+        if (!couponCode || e.status === 409 || !(e.status >= 400 && e.status < 500)) {
+          throw e;
+        }
+        AsyncStorage.removeItem('ss:coupon').catch(() => {});
+        return hold(null);
+      });
       if (adults < want.a || children < (trip?.children || 0)) {
         toast.current?.show(`Held for ${adults} adults${children ? ` and ${children} children` : ''}, the most this room type takes`);
       }

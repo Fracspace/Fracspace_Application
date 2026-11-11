@@ -17,7 +17,7 @@ import {markTap, useFirstFrame, useJsFps, useRenderCount} from '../perf';
 import {SearchIcon, TicketIcon} from './icons';
 import Explore, {SearchBar} from './Explore';
 import Bookings from './Bookings';
-import SearchSheet, {initialSearch} from './SearchSheet';
+import SearchSheet, {initialSearch, tripDates} from './SearchSheet';
 import {useStaysHome, ymd} from '../api/stays';
 import {ErrorCard} from '../api/ui';
 
@@ -113,16 +113,21 @@ export default function Stays({navigation, route}) {
   });
 
   const back = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Hub'));
-  // The applied search (dates + guests) goes with the stay, through to the
-  // hold and Review Booking. Read from a ref so openStay keeps its identity.
+  // The search's guests (and its dates, flexible ones made concrete) go with
+  // the stay, through to the hold and Review Booking. Read from a ref so
+  // openStay keeps its identity.
   const searchRef = useRef(search);
   searchRef.current = search;
   const openStay = useCallback(
     stayId => {
       markTap('StayDetail');
       const s = searchRef.current;
-      const dated = s.applied && s.mode === 'dates' && s.in && s.out && s.out > s.in;
-      const trip = dated ? {checkIn: ymd(s.in), checkOut: ymd(s.out), adults: Math.max(1, s.g.a), children: s.g.c} : undefined;
+      const d = tripDates(s);
+      const trip = {
+        ...(d ? {checkIn: ymd(d.cin), checkOut: ymd(d.cout)} : null),
+        adults: Math.max(1, s.g.a),
+        children: s.g.c,
+      };
       navigation.navigate('StayDetail', {stayId, trip});
     },
     [navigation],

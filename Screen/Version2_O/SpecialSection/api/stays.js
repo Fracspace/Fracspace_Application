@@ -415,11 +415,11 @@ function mockStay(id) {
   return mockStays.get(id);
 }
 
-/** `trip` (from the search) prices the suites for those dates. */
+/** `trip` (from the search) prices the suites for its dates, when it has any. */
 export const useStayDetail = (idOrSlug, trip) =>
   useQuery(
-    `stays:property:${idOrSlug}${trip ? `:${trip.checkIn}:${trip.checkOut}` : ''}`,
-    () => getProperty(idOrSlug, trip ? {checkIn: trip.checkIn, checkOut: trip.checkOut} : undefined).then(toStay),
+    `stays:property:${idOrSlug}${trip?.checkIn ? `:${trip.checkIn}:${trip.checkOut}` : ''}`,
+    () => getProperty(idOrSlug, trip?.checkIn ? {checkIn: trip.checkIn, checkOut: trip.checkOut} : undefined).then(toStay),
     {
       mock: USE_MOCK.stays ? mockStay(idOrSlug) : undefined,
     },

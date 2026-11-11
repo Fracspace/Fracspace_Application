@@ -20,8 +20,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const STEPS = ['where', 'when', 'who'];
 const GUESTS = [
   {k: 'a', label: 'Adults', sub: 'Ages 13 or above', min: 1},
-  {k: 'c', label: 'Children', sub: 'Ages 2–12', min: 0},
-  {k: 'i', label: 'Infants', sub: 'Under 2', min: 0},
+  {k: 'c', label: 'Children', sub: 'Ages 12 or under', min: 0},
 ];
 const DURS = ['A weekend', 'A week', 'A month'];
 
@@ -39,7 +38,7 @@ export function initialSearch() {
     out: new Date(cin.getFullYear(), cin.getMonth(), cin.getDate() + 1),
     dur: 'A weekend',
     mon: '',
-    g: {a: 1, c: 0, i: 0},
+    g: {a: 1, c: 0},
     applied: false, // set by "Search stays"; the capsules then show the choices
     pillCity: '', // the destination capsule that is on
   };
@@ -62,9 +61,35 @@ export function whenLabel(s) {
 }
 
 export function guestLabel(s) {
-  const {a, c, i} = s.g;
-  const t = a + c;
-  return t + (t === 1 ? ' guest' : ' guests') + (i ? ' · ' + i + (i === 1 ? ' infant' : ' infants') : '');
+  const t = s.g.a + s.g.c;
+  return t + (t === 1 ? ' guest' : ' guests');
+}
+
+const NIGHTS = {'A weekend': 2, 'A week': 7, 'A month': 30};
+
+/**
+ * The search's stay as check-in / checkout Dates, or null. "Flexible" turns
+ * into real dates: the first possible start in the chosen month (else from
+ * tomorrow), on a Friday for "A weekend".
+ */
+export function tripDates(s) {
+  if (s.mode !== 'flex') {
+    return s.in && s.out && s.out > s.in ? {cin: s.in, cout: s.out} : null;
+  }
+  const t = new Date();
+  let cin = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
+  const [mon, yr] = (s.mon || '').split(' ');
+  const m = MONTHS.indexOf(mon);
+  if (m >= 0 && Number(yr)) {
+    const first = new Date(Number(yr), m, 1);
+    cin = first > cin ? first : cin;
+  }
+  const dur = s.dur || 'A weekend';
+  if (dur === 'A weekend') {
+    cin = new Date(cin.getFullYear(), cin.getMonth(), cin.getDate() + ((5 - cin.getDay() + 7) % 7));
+  }
+  const cout = new Date(cin.getFullYear(), cin.getMonth(), cin.getDate() + NIGHTS[dur]);
+  return {cin, cout};
 }
 
 const whereLabel = s => (s.city === 'Hyderabad' ? 'Banjara Hills, Hyderabad, Telangana' : s.city || 'Anywhere');
@@ -467,7 +492,7 @@ export default function SearchSheet({init, step: initStep, onClose}) {
     } else if (s.step === 'when') {
       patch({in: null, out: null, mon: '', dur: 'A weekend'});
     } else {
-      patch({g: {a: 1, c: 0, i: 0}});
+      patch({g: {a: 1, c: 0}});
     }
   };
   return (
