@@ -38,35 +38,34 @@ export function useHold(booking) {
     throw e;
   }, []);
 
-  // Changes can overlap (quick taps, a slow network): only the newest one's
-  // answer is drawn, and `busy` stays on until the last one is back.
-  const seq = useRef(0);
-  const inFlight = useRef(0);
-  /**
-   * PATCH dates / guests / coupon / wallet; resolves to the new state, or to
-   * null when a newer change was sent meanwhile (its answer wins).
-   */
+  // Changes go to the server one at a time, in order, so answers can't arrive
+  // out of order and the drawn state is always the server's latest; `busy`
+  // stays on until the last queued change is back.
+  const queue = useRef(Promise.resolve());
+  const queued = useRef(0);
+  /** PATCH dates / guests / coupon / wallet; resolves to the new state. */
   const patch = useCallback(
-    async body => {
-      const n = ++seq.current;
-      inFlight.current += 1;
+    body => {
+      queued.current += 1;
       setBusy(true);
-      try {
-        const res = await patchBooking(id, body);
-        if (n !== seq.current) {
-          return null;
+      const run = async () => {
+        try {
+          const res = await patchBooking(id, body);
+          const next = toReviewState(res.booking, res.quote);
+          setState(next);
+          return next;
+        } catch (e) {
+          return fail(e);
+        } finally {
+          queued.current -= 1;
+          if (!queued.current) {
+            setBusy(false);
+          }
         }
-        const next = toReviewState(res.booking, res.quote);
-        setState(next);
-        return next;
-      } catch (e) {
-        return n === seq.current || e.status === 410 ? fail(e) : null;
-      } finally {
-        inFlight.current -= 1;
-        if (!inFlight.current) {
-          setBusy(false);
-        }
-      }
+      };
+      const p = queue.current.then(run);
+      queue.current = p.catch(() => {});
+      return p;
     },
     [id, fail],
   );

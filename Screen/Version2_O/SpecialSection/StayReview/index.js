@@ -279,7 +279,15 @@ export default function StayReview({navigation, route}) {
 
   // A date / guest change is sent to the server after a short pause; if it is
   // refused (sold out, too many guests) the trip goes back to what is held.
+  // Answers only overwrite the trip while it is still what was sent, so taps
+  // made meanwhile aren't lost (they go in the next change).
   const {patch} = hold;
+  const latest = useRef(null);
+  latest.current = {cin, cout, adults, kids, hs};
+  const asSent = sent => {
+    const l = latest.current;
+    return l.cin === sent.cin && l.cout === sent.cout && l.adults === sent.adults && l.kids === sent.kids;
+  };
   useEffect(() => {
     if (!live) {
       return;
@@ -293,24 +301,27 @@ export default function StayReview({navigation, route}) {
     if (same) {
       return;
     }
+    const sent = {cin, cout, adults, kids};
     const id = setTimeout(() => {
       patch({cin, cout, rooms, adults, children: kids})
         .then(next => {
-          if (!next) {
-            return; // a newer change is on its way
-          }
           setNotice(null);
-          setCin(next.cin);
-          setCout(next.cout);
-          setAdults(next.adults);
-          setKids(next.children);
+          if (asSent(sent)) {
+            setCin(next.cin);
+            setCout(next.cout);
+            setAdults(next.adults);
+            setKids(next.children);
+          }
         })
         .catch(e => {
           setNotice(errText(e));
-          setCin(hs.cin);
-          setCout(hs.cout);
-          setAdults(hs.adults);
-          setKids(hs.children);
+          if (asSent(sent)) {
+            const held = latest.current.hs;
+            setCin(held.cin);
+            setCout(held.cout);
+            setAdults(held.adults);
+            setKids(held.children);
+          }
         });
     }, 450);
     return () => clearTimeout(id);
