@@ -296,6 +296,9 @@ export default function StayReview({navigation, route}) {
     const id = setTimeout(() => {
       patch({cin, cout, rooms, adults, children: kids})
         .then(next => {
+          if (!next) {
+            return; // a newer change is on its way
+          }
           setNotice(null);
           setCin(next.cin);
           setCout(next.cout);
