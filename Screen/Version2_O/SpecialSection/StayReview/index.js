@@ -282,6 +282,23 @@ export default function StayReview({navigation, route}) {
   // Answers only overwrite the trip while it is still what was sent, so taps
   // made meanwhile aren't lost (they go in the next change).
   const {patch} = hold;
+  // The trip on screen is the one the server holds (nothing left to send).
+  const tripSaved =
+    !live ||
+    (cin.getTime() === hs.cin.getTime() &&
+      cout.getTime() === hs.cout.getTime() &&
+      adults === hs.adults &&
+      kids === hs.children &&
+      rooms === hs.rooms);
+  // Pay tapped before the last change was saved: it waits (spinner on) and
+  // goes ahead once the server has the trip on screen; a refused change stops it.
+  const waiting = useRef(false);
+  const stopWaiting = useCallback(() => {
+    if (waiting.current) {
+      waiting.current = false;
+      setPhase('idle');
+    }
+  }, []);
   const latest = useRef(null);
   latest.current = {cin, cout, adults, kids, hs};
   const asSent = sent => {
@@ -289,16 +306,8 @@ export default function StayReview({navigation, route}) {
     return l.cin === sent.cin && l.cout === sent.cout && l.adults === sent.adults && l.kids === sent.kids;
   };
   useEffect(() => {
-    if (!live) {
-      return;
-    }
-    const same =
-      cin.getTime() === hs.cin.getTime() &&
-      cout.getTime() === hs.cout.getTime() &&
-      adults === hs.adults &&
-      kids === hs.children &&
-      rooms === hs.rooms;
-    if (same) {
+    // Not during a payment; while Pay waits, send at once (once).
+    if (tripSaved || (phase !== 'idle' && (!waiting.current || hold.busy))) {
       return;
     }
     const sent = {cin, cout, adults, kids};
@@ -307,6 +316,16 @@ export default function StayReview({navigation, route}) {
         .then(next => {
           setNotice(null);
           if (asSent(sent)) {
+            // The server changed what was asked (fewer guests, other dates):
+            // a waiting Pay stops so the guest sees the new price first.
+            if (
+              next.cin.getTime() !== cin.getTime() ||
+              next.cout.getTime() !== cout.getTime() ||
+              next.adults !== adults ||
+              next.children !== kids
+            ) {
+              stopWaiting();
+            }
             setCin(next.cin);
             setCout(next.cout);
             setAdults(next.adults);
@@ -315,6 +334,7 @@ export default function StayReview({navigation, route}) {
         })
         .catch(e => {
           setNotice(errText(e));
+          stopWaiting();
           if (asSent(sent)) {
             const held = latest.current.hs;
             setCin(held.cin);
@@ -323,9 +343,9 @@ export default function StayReview({navigation, route}) {
             setKids(held.children);
           }
         });
-    }, 450);
+    }, waiting.current ? 0 : 450);
     return () => clearTimeout(id);
-  }, [live, hs, cin, cout, rooms, adults, kids, patch]);
+  }, [tripSaved, phase, hold.busy, cin, cout, rooms, adults, kids, patch, stopWaiting]);
 
   // A coupon claimed on the Stays listing fills the field.
   useEffect(() => {
@@ -340,22 +360,39 @@ export default function StayReview({navigation, route}) {
   const couponOn = live && hs.discount > 0;
   const applyCoupon = useCallback(() => {
     const c = code.trim().toUpperCase();
-    if (!c) {
+    if (!c || phase !== 'idle') {
       return;
     }
     patch({couponCode: c})
       .then(() => setNotice(null))
-      .catch(e => setNotice(errText(e)));
-  }, [code, patch]);
+      .catch(e => {
+        setNotice(errText(e));
+        stopWaiting();
+      });
+  }, [code, phase, patch, stopWaiting]);
   const removeCoupon = useCallback(() => {
+    if (phase !== 'idle') {
+      return;
+    }
     setCode('');
     AsyncStorage.removeItem('ss:coupon').catch(() => {});
-    patch({couponCode: null}).catch(e => setNotice(errText(e)));
-  }, [patch]);
+    patch({couponCode: null}).catch(e => {
+      setNotice(errText(e));
+      stopWaiting();
+    });
+  }, [phase, patch, stopWaiting]);
   const walletOn = live && hs.walletAmount > 0;
   const toggleWallet = useCallback(
-    on => patch({useWallet: on}).catch(e => setNotice(errText(e))),
-    [patch],
+    on => {
+      if (phase !== 'idle') {
+        return;
+      }
+      patch({useWallet: on}).catch(e => {
+        setNotice(errText(e));
+        stopWaiting();
+      });
+    },
+    [phase, patch, stopWaiting],
   );
 
   // Leaving Review without paying (back button, gesture) frees the room at once.
@@ -489,45 +526,54 @@ export default function StayReview({navigation, route}) {
     [hold, paidOk],
   );
 
+  /** The live payment; Pay has already put the phase on busy. */
+  const charge = useCallback(() => {
+    if (after.current === 'wait') {
+      paymentStatus(hold.id)
+        .then(r => outcome(r))
+        .catch(e => {
+          setPhase('idle');
+          setNotice(errText(e));
+        });
+      return;
+    }
+    hold
+      .pay(walletOn)
+      .then(async res => {
+        if (!res.requiresPayment) {
+          paidOk(res.booking);
+          return;
+        }
+        const {attemptId} = res.payment;
+        const result = await openPayU(res.payment);
+        // Always reported, success or not; the server asks PayU itself.
+        const r = await paymentResult(hold.id, attemptId, result).catch(e =>
+          e.status === 410 ? {next: 'expired'} : {next: 'pending'},
+        );
+        await outcome(r, result.event);
+      })
+      .catch(e => {
+        setPhase('idle');
+        setNotice(errText(e));
+        if (e.errors?.useWallet) {
+          patch({useWallet: false}).catch(() => {}); // balance changed: redraw the amount
+        }
+      });
+  }, [hold, walletOn, patch, paidOk, outcome]);
+
   const pay = useCallback(() => {
-    if (phase !== 'idle' || hold.expired || hold.busy || after.current === 'closed') {
+    if (phase !== 'idle' || hold.expired || after.current === 'closed') {
       return;
     }
     setPhase('busy');
     if (live) {
       setNotice(null);
       setNote(null);
-      if (after.current === 'wait') {
-        paymentStatus(hold.id)
-          .then(r => outcome(r))
-          .catch(e => {
-            setPhase('idle');
-            setNotice(errText(e));
-          });
-        return;
+      if (tripSaved && !hold.busy) {
+        charge();
+      } else {
+        waiting.current = true;
       }
-      hold
-        .pay(walletOn)
-        .then(async res => {
-          if (!res.requiresPayment) {
-            paidOk(res.booking);
-            return;
-          }
-          const {attemptId} = res.payment;
-          const result = await openPayU(res.payment);
-          // Always reported, success or not; the server asks PayU itself.
-          const r = await paymentResult(hold.id, attemptId, result).catch(e =>
-            e.status === 410 ? {next: 'expired'} : {next: 'pending'},
-          );
-          await outcome(r, result.event);
-        })
-        .catch(e => {
-          setPhase('idle');
-          setNotice(errText(e));
-          if (e.errors?.useWallet) {
-            patch({useWallet: false}).catch(() => {}); // balance changed: redraw the amount
-          }
-        });
       return;
     }
     setPaid({at: paidLabel(new Date()), ...mockReceipt()});
@@ -535,7 +581,14 @@ export default function StayReview({navigation, route}) {
       setPhase('anim');
       t2.current = setTimeout(() => setPhase('done'), CONFIRM_MS);
     }, 1200);
-  }, [phase, live, hold, walletOn, patch, paidOk, outcome]);
+  }, [phase, live, hold.expired, hold.busy, tripSaved, charge]);
+  // A waiting Pay goes ahead once the server has the trip on screen.
+  useEffect(() => {
+    if (phase === 'busy' && waiting.current && tripSaved && !hold.busy) {
+      waiting.current = false;
+      charge();
+    }
+  }, [phase, tripSaved, hold.busy, charge]);
 
   // Back from the background (a long pause, another app): the hold may have run
   // out or a slow payment come through meanwhile, so ask the server again. Not
