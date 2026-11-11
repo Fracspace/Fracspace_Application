@@ -55,10 +55,6 @@ export const stays = [
   {id: 'ht', name: 'Hilltop by Fracspace', sub: 'Munnar, Kerala', price: '₹5,999', rate: '4.9', loc: 'Munnar', img: images.hilltop},
 ];
 
-// IVA Shop isn't live yet: the Hub's Shop card and Iva Essentials show
-// "Coming soon" and open nothing. Set to false when the shop launches.
-export const shopComingSoon = true;
-
 export const ivaProducts = [
   {id: 'blessed', cat: 'Signature puja kit', name: 'Blessed Kit', price: 1499, img: images.blessedKit},
   {id: 'rudra', cat: 'Rudraksha', name: 'Rudraksha Band', price: 499, img: null},

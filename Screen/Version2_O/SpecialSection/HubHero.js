@@ -15,7 +15,7 @@ import Svg, {Defs, RadialGradient, Rect, Stop} from 'react-native-svg';
 import {colors, fonts, ls} from './theme';
 import {E, LoopGate, Nudge, PressScale, kf, useLinger, useLoop, useReducedMotion, useToggle} from './anim';
 import {BackIcon, Eyebrow, GlassButton, Tag} from './HubBits';
-import {heroSlides, images, shopComingSoon} from './data';
+import {images} from './data';
 import {useRenderCount} from './perf';
 
 export const HERO_H = 476;
@@ -143,9 +143,9 @@ const Copy = React.memo(function Copy({slide, on, onCta}) {
           <Text style={styles.sub}>{slide.sub}</Text>
         </CopyItem>
         <CopyItem on={on} index={3}>
-          {shopComingSoon && slide.to === 'IvaShop' ? (
-            // IVA Shop isn't live: the same tag as the Shop card, nothing to tap.
-            <View style={styles.soon} accessible accessibilityLabel="Shop Iva, coming soon">
+          {slide.soon ? (
+            // Its section's flag is coming_soon: the same tag as its category card.
+            <View style={styles.soon} accessible accessibilityLabel={`${slide.cta}, coming soon`}>
               <Tag>COMING SOON</Tag>
             </View>
           ) : (
@@ -190,7 +190,7 @@ function Seg({state, onPress, index, slide}) {
   );
 }
 
-function Odometer({slide}) {
+function Odometer({slide, count}) {
   const y = useSharedValue(0);
   useEffect(() => {
     y.value = withTiming(-16 * slide, {duration: 600, easing: E.spring});
@@ -199,7 +199,7 @@ function Odometer({slide}) {
   return (
     <View style={styles.odo}>
       <Animated.View style={a}>
-        {['1', '2', '3', '4'].map(n => (
+        {Array.from({length: count}, (_, i) => String(i + 1)).map(n => (
           <Text key={n} style={styles.odoText}>
             {n}
           </Text>
@@ -209,7 +209,7 @@ function Odometer({slide}) {
   );
 }
 
-export default function HubHero({slide, onSeg, onCta, onBack, scrollY, topInset}) {
+export default function HubHero({slides, slide, onSeg, onCta, onBack, scrollY, topInset}) {
   const {width} = useWindowDimensions();
   useRenderCount('HubHero');
   // .hero-inner{animation:heropar; animation-range:0 470px}
@@ -220,7 +220,7 @@ export default function HubHero({slide, onSeg, onCta, onBack, scrollY, topInset}
   return (
     <View style={styles.hero}>
       <Animated.View style={[StyleSheet.absoluteFill, par]}>
-        {heroSlides.map((s, i) => (
+        {slides.map((s, i) => (
           <Slide key={s.eyebrow} slide={s} on={i === slide} width={width} />
         ))}
       </Animated.View>
@@ -234,12 +234,12 @@ export default function HubHero({slide, onSeg, onCta, onBack, scrollY, topInset}
         <BackIcon />
       </GlassButton>
       <View style={styles.hcopies} pointerEvents="box-none">
-        {heroSlides.map((s, i) => (
+        {slides.map((s, i) => (
           <Copy key={s.eyebrow} slide={s} on={i === slide} onCta={onCta} />
         ))}
       </View>
       <View style={styles.pager}>
-        {heroSlides.map((s, i) => (
+        {slides.map((s, i) => (
           <Seg
             key={s.eyebrow}
             index={i}
@@ -249,8 +249,8 @@ export default function HubHero({slide, onSeg, onCta, onBack, scrollY, topInset}
           />
         ))}
         <View style={styles.count}>
-          <Odometer slide={slide} />
-          <Text style={styles.odoText}>/4</Text>
+          <Odometer slide={slide} count={slides.length} />
+          <Text style={styles.odoText}>/{slides.length}</Text>
         </View>
       </View>
     </View>

@@ -18,6 +18,8 @@ import {colors, fonts} from './theme';
 import {E, LoopGate, RevealScope, ViewportGate, useReducedMotion} from './anim';
 import {BackIcon, GlassButton, Grain, Tag} from './HubBits';
 import HubHero, {SLIDE_MS} from './HubHero';
+import {heroSlides} from './data';
+import {useFlag} from '../../flags/useFlag';
 import HubCategories from './HubCategories';
 import {CartBar, FeaturedStays, IvaEssentials} from './HubRails';
 import HubConcert from './HubConcert';
@@ -77,7 +79,22 @@ export default function Hub({navigation}) {
   useFirstFrame('Hub');
   useJsFps('Hub', isFocused);
 
-  const [slide, setSlide] = useState(0);
+  // App flags (portal → App Controls): 'live' | 'coming_soon' | 'hidden'.
+  const stays = useFlag('hub.stays');
+  const shop = useFlag('hub.shop');
+  const concerts = useFlag('hub.concerts');
+  const flagOf = useRef({});
+  flagOf.current = {Stays: stays, IvaShop: shop, ConcertDetails: concerts};
+  // Hidden sections lose their slide; coming-soon ones keep it without a CTA.
+  const slides = useMemo(() => {
+    const state = {Stays: stays, IvaShop: shop, ConcertDetails: concerts};
+    return heroSlides.filter(s => state[s.to] !== 'hidden').map(s => ({...s, soon: state[s.to] === 'coming_soon'}));
+  }, [stays, shop, concerts]);
+  const count = useRef(slides.length);
+  count.current = slides.length;
+
+  const [slideState, setSlide] = useState(0);
+  const slide = slideState < slides.length ? slideState : 0;
   const [qty, setQtyState] = useState({});
   const [jig, setJig] = useState(0);
 
@@ -101,7 +118,7 @@ export default function Hub({navigation}) {
   const timer = useRef(null);
   const startTimer = useCallback(() => {
     clearInterval(timer.current);
-    timer.current = setInterval(() => setSlide(s => (s + 1) % 4), SLIDE_MS);
+    timer.current = setInterval(() => setSlide(s => (s + 1) % count.current), SLIDE_MS);
   }, []);
   useFocusEffect(
     useCallback(() => {
@@ -115,6 +132,10 @@ export default function Hub({navigation}) {
       if (to === 'categories') {
         scrollRef.current?.scrollTo({y: categoriesY.current, animated: true});
       } else {
+        // Only open a section that is live (its flag may have changed).
+        if (flagOf.current[to] && flagOf.current[to] !== 'live') {
+          return;
+        }
         markTap(to);
         navigation.navigate(to);
       }
@@ -177,6 +198,7 @@ export default function Hub({navigation}) {
                   <View ref={contentRef} collapsable={false} style={styles.content}>
                     <ViewportGate>
                       <HubHero
+                        slides={slides}
                         slide={slide}
                         scrollY={scrollY}
                         topInset={insets.top + 4}
@@ -187,18 +209,31 @@ export default function Hub({navigation}) {
                     </ViewportGate>
                     <View onLayout={e => (categoriesY.current = e.nativeEvent.layout.y)}>
                       <ViewportGate>
-                        <HubCategories onStays={act.stays} onShop={act.shop} onConcerts={act.concerts} />
+                        <HubCategories
+                          stays={stays}
+                          shop={shop}
+                          concerts={concerts}
+                          onStays={act.stays}
+                          onShop={act.shop}
+                          onConcerts={act.concerts}
+                        />
                       </ViewportGate>
                     </View>
-                    <ViewportGate>
-                      <FeaturedStays onOpenStay={act.openStay} onViewAll={act.stays} />
-                    </ViewportGate>
-                    <ViewportGate>
-                      <IvaEssentials qty={qty} setQty={setQty} onOpenShop={act.shop} />
-                    </ViewportGate>
-                    <ViewportGate>
-                      <HubConcert onOpen={act.concerts} onViewAll={act.concerts} />
-                    </ViewportGate>
+                    {stays === 'live' ? (
+                      <ViewportGate>
+                        <FeaturedStays onOpenStay={act.openStay} onViewAll={act.stays} />
+                      </ViewportGate>
+                    ) : null}
+                    {shop !== 'hidden' ? (
+                      <ViewportGate>
+                        <IvaEssentials soon={shop === 'coming_soon'} qty={qty} setQty={setQty} onOpenShop={act.shop} />
+                      </ViewportGate>
+                    ) : null}
+                    {concerts === 'live' ? (
+                      <ViewportGate>
+                        <HubConcert onOpen={act.concerts} onViewAll={act.concerts} />
+                      </ViewportGate>
+                    ) : null}
                   </View>
                 </Animated.ScrollView>
               </RevealScope>
@@ -213,7 +248,7 @@ export default function Hub({navigation}) {
                 <Tag>CURATED</Tag>
               </Animated.View>
 
-              <CartBar qty={qty} jig={jig} bottom={bottom + 88} onPress={act.shop} />
+              {shop === 'live' ? <CartBar qty={qty} jig={jig} bottom={bottom + 88} onPress={act.shop} /> : null}
 
               <Grain />
             </View>

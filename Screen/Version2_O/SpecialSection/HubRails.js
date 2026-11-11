@@ -14,7 +14,7 @@ import {colors, fonts, ls, type} from './theme';
 import {E, LoopGate, Nudge, PressScale, Reveal, Sheen, kf, useLinger, useReducedMotion, useToggle} from './anim';
 import {useRenderCount} from './perf';
 import {ArrowIcon, Tag} from './HubBits';
-import {ivaProducts, shopComingSoon} from './data';
+import {ivaProducts} from './data';
 import {likeProperty, useStaysHome} from './api/stays';
 
 const CARD_W = 288;
@@ -247,7 +247,7 @@ function Stepper({qty, onInc, onDec, name}) {
   );
 }
 
-/** Shown instead of the product rail until IVA Shop launches (no mock products). */
+/** Shown instead of the product rail while hub.shop is coming_soon (no mock products). */
 function IvaSoonCard() {
   return (
     <View style={styles.soonCard} accessible accessibilityLabel="Iva Essentials, coming soon">
@@ -282,7 +282,7 @@ function IvaCard({product, qty, onInc, onDec, onOpen}) {
   );
 }
 
-export const IvaEssentials = React.memo(function IvaEssentials({qty, setQty, onOpenShop}) {
+export const IvaEssentials = React.memo(function IvaEssentials({soon, qty, setQty, onOpenShop}) {
   useRenderCount('IvaEssentials');
   return (
     <View style={{paddingTop: 38}}>
@@ -292,9 +292,9 @@ export const IvaEssentials = React.memo(function IvaEssentials({qty, setQty, onO
         sub="Spiritual décor & artisanal essentials"
         link="Explore"
         onLink={onOpenShop}
-        soon={shopComingSoon}
+        soon={soon}
       />
-      {shopComingSoon ? (
+      {soon ? (
         <IvaSoonCard />
       ) : (
         <Animated.ScrollView

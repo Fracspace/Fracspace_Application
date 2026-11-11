@@ -8,7 +8,6 @@ import {colors, fonts, type} from './theme';
 import {E, LoopGate, PressScale, Reveal, Sheen, cssAngle, kf, useLoop} from './anim';
 import {useRenderCount} from './perf';
 import {ArrowCircle, MTag, Tag} from './HubBits';
-import {shopComingSoon} from './data';
 
 const CARD_ANGLE = cssAngle(160);
 const K = 44 / 40; // the 40-unit icons are drawn at 44px
@@ -189,62 +188,73 @@ function CatCard({style, sheenDelay, onPress, label, disabled, children}) {
   );
 }
 
-export default React.memo(function HubCategories({onStays, onShop, onConcerts}) {
+/**
+ * Each card follows its app flag: 'live' tappable, 'coming_soon' dimmed with a
+ * COMING SOON tag and not tappable, 'hidden' not rendered. A lone Stays/Shop
+ * card fills the row; with every card hidden the section is gone.
+ */
+export default React.memo(function HubCategories({stays, shop, concerts, onStays, onShop, onConcerts}) {
   useRenderCount('HubCategories');
+  const showStays = stays !== 'hidden';
+  const showShop = shop !== 'hidden';
+  const showConcerts = concerts !== 'hidden';
+  if (!showStays && !showShop && !showConcerts) {
+    return null;
+  }
+  const dim = state => (state === 'coming_soon' ? styles.dim : null);
   return (
     <View style={styles.sec}>
       <Reveal style={styles.head}>
         <Text style={type.h2}>Explore Categories</Text>
         <Tag>CURATED</Tag>
       </Reveal>
-      <Reveal style={styles.grid}>
-        <CatCard style={styles.half} sheenDelay={0} onPress={onStays} label="Stays">
-          <View style={styles.top}>
-            <StaysIcon />
-            <ArrowCircle />
-          </View>
-          <Text style={styles.h3}>Stays</Text>
-          <MTag>40+ RETREATS</MTag>
-          <Text style={styles.meta}>Hotels · Villas · Resorts</Text>
-        </CatCard>
-        {shopComingSoon ? (
-          <CatCard style={styles.half} label="Shop" disabled>
-            <View style={styles.top}>
-              <View style={styles.dim}>
-                <ShopIcon />
+      {showStays || showShop ? (
+        <Reveal style={styles.grid}>
+          {showStays ? (
+            <CatCard style={styles.half} sheenDelay={0} onPress={onStays} label="Stays" disabled={stays !== 'live'}>
+              <View style={styles.top}>
+                <View style={dim(stays)}>
+                  <StaysIcon />
+                </View>
+                {stays === 'live' ? <ArrowCircle /> : null}
               </View>
+              <Text style={[styles.h3, dim(stays)]}>Stays</Text>
+              {stays === 'live' ? <MTag>40+ RETREATS</MTag> : <Tag>COMING SOON</Tag>}
+              <Text style={[styles.meta, dim(stays)]}>Hotels · Villas · Resorts</Text>
+            </CatCard>
+          ) : null}
+          {showShop ? (
+            <CatCard style={styles.half} sheenDelay={500} onPress={onShop} label="Shop" disabled={shop !== 'live'}>
+              <View style={styles.top}>
+                <View style={dim(shop)}>
+                  <ShopIcon />
+                </View>
+                {shop === 'live' ? <ArrowCircle /> : null}
+              </View>
+              <Text style={[styles.h3, dim(shop)]}>Shop</Text>
+              {shop === 'live' ? <MTag>BOUTIQUE</MTag> : <Tag>COMING SOON</Tag>}
+              <Text style={[styles.meta, dim(shop)]}>Membership · Home · Pooja</Text>
+            </CatCard>
+          ) : null}
+        </Reveal>
+      ) : null}
+      {showConcerts ? (
+        <Reveal style={showStays || showShop ? {marginTop: 12} : null}>
+          <CatCard style={styles.wide} sheenDelay={1000} onPress={onConcerts} label="Concerts" disabled={concerts !== 'live'}>
+            <View style={[styles.noteBox, dim(concerts)]}>
+              <ConcertIcon />
             </View>
-            <Text style={[styles.h3, styles.dim]}>Shop</Text>
-            <Tag>COMING SOON</Tag>
-            <Text style={[styles.meta, styles.dim]}>Membership · Home · Pooja</Text>
+            <View style={styles.wideText}>
+              <View style={styles.titleRow}>
+                <Text style={[styles.h3, {marginTop: 0}, dim(concerts)]}>Concerts</Text>
+                {concerts === 'live' ? <MTag>LIVE & EXCLUSIVE</MTag> : <Tag>COMING SOON</Tag>}
+              </View>
+              <Text style={[styles.meta, {fontSize: 12}, dim(concerts)]}>Music · Live Events · Shows</Text>
+            </View>
+            {concerts === 'live' ? <ArrowCircle /> : null}
           </CatCard>
-        ) : (
-          <CatCard style={styles.half} sheenDelay={500} onPress={onShop} label="Shop">
-            <View style={styles.top}>
-              <ShopIcon />
-              <ArrowCircle />
-            </View>
-            <Text style={styles.h3}>Shop</Text>
-            <MTag>BOUTIQUE</MTag>
-            <Text style={styles.meta}>Membership · Home · Pooja</Text>
-          </CatCard>
-        )}
-      </Reveal>
-      <Reveal style={{marginTop: 12}}>
-        <CatCard style={styles.wide} sheenDelay={1000} onPress={onConcerts} label="Concerts">
-          <View style={styles.noteBox}>
-            <ConcertIcon />
-          </View>
-          <View style={styles.wideText}>
-            <View style={styles.titleRow}>
-              <Text style={[styles.h3, {marginTop: 0}]}>Concerts</Text>
-              <MTag>LIVE & EXCLUSIVE</MTag>
-            </View>
-            <Text style={[styles.meta, {fontSize: 12}]}>Music · Live Events · Shows</Text>
-          </View>
-          <ArrowCircle />
-        </CatCard>
-      </Reveal>
+        </Reveal>
+      ) : null}
     </View>
   );
 });
