@@ -51,7 +51,6 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 // payment-result answers with `next`; payment-status may only carry the booking.
 const NEXT = {confirmed: 'confirmed', payment_failed: 'failed', expired: 'expired', cancelled: 'cancelled'};
 const nextOf = r => r?.next || NEXT[r?.booking?.status || r?.status] || 'pending';
-const COUNTS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const MUTED = '#ADA597';
 
 /** `.stg > *`: rise (.7s --out) staggered 40 / 120 / 200 / 280 / 360ms. */
@@ -104,6 +103,8 @@ function StepBtn({label, onPress, disabled, children}) {
 }
 
 function Stepper({title, sub, value, min, max, onDec, onInc, noun}) {
+  // One odometer row per possible count: with several rooms the max goes past 10.
+  const counts = useMemo(() => Array.from({length: max + 1}, (_, i) => String(i)), [max]);
   return (
     <View style={styles.grow}>
       <View style={styles.growCopy}>
@@ -115,7 +116,7 @@ function Stepper({title, sub, value, min, max, onDec, onInc, noun}) {
           −
         </StepBtn>
         <View style={styles.sn} accessibilityLiveRegion="polite" accessibilityLabel={String(value)}>
-          <Odo index={value} h={22} items={COUNTS.slice(0, max + 1)} duration={500} textStyle={styles.snT} />
+          <Odo index={value} h={22} items={counts} duration={500} textStyle={styles.snT} />
         </View>
         <StepBtn label={`More ${noun}`} onPress={onInc} disabled={value >= max}>
           +
@@ -994,7 +995,7 @@ const styles = StyleSheet.create({
   step: {flexDirection: 'row', alignItems: 'center', gap: 4, height: 40, borderRadius: 12, borderWidth: 1, borderColor: colors.goldA(0.22)},
   sb: {width: 40, height: 40, alignItems: 'center', justifyContent: 'center'},
   sbT: {fontFamily: fonts.bold, fontSize: 18, color: colors.gold},
-  sn: {width: 18, height: 22, overflow: 'hidden', alignItems: 'center'},
+  sn: {minWidth: 18, height: 22, overflow: 'hidden', alignItems: 'center'},
   snT: {fontFamily: fonts.extrabold, fontSize: 15, color: colors.white, textAlign: 'center'},
 
   price: {padding: 16, gap: 12},
