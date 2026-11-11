@@ -294,6 +294,12 @@ export default function StayReview({navigation, route}) {
   // Pay tapped before the last change was saved: it waits (spinner on) and
   // goes ahead once the server has the trip on screen; a refused change stops it.
   const waiting = useRef(false);
+  const payLock = useRef(false);
+  useEffect(() => {
+    if (phase === 'idle') {
+      payLock.current = false;
+    }
+  }, [phase]);
   const stopWaiting = useCallback(() => {
     if (waiting.current) {
       waiting.current = false;
@@ -563,9 +569,17 @@ export default function StayReview({navigation, route}) {
   }, [hold, walletOn, patch, paidOk, outcome]);
 
   const pay = useCallback(() => {
-    if (phase !== 'idle' || hold.expired || after.current === 'closed') {
+    if (payLock.current || phase !== 'idle' || hold.expired || after.current === 'closed') {
       return;
     }
+    // No hold from the server: the mock receipt is for dev builds only. A
+    // release build never shows a booking the server didn't make.
+    if (!live && !__DEV__) {
+      setNotice("We couldn't hold this stay. Go back and reserve it again.");
+      return;
+    }
+    // A ref, not `phase`: two taps in one frame both still see 'idle'.
+    payLock.current = true;
     setPhase('busy');
     if (live) {
       setNotice(null);
