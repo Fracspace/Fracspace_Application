@@ -58,15 +58,14 @@ function Ripple({delay}) {
   return <Animated.View pointerEvents="none" style={[styles.ring, a]} />;
 }
 
-function StagePhoto({uri}) {
+function StagePhoto() {
   // pan 16s ease-in-out infinite alternate
   const p = useLoop(16000, {alternate: true});
   const a = useAnimatedStyle(() => {
     const t = E.easeInOut(p.value);
     return {transform: [{scale: 1.1 + 0.1 * t}, {translateX: -8 + 18 * t}]};
   });
-  const source = uri ? {uri} : images.concert;
-  return <Animated.Image source={source} resizeMode="cover" style={[StyleSheet.absoluteFill, styles.photo, a]} />;
+  return <Animated.Image source={images.concert} resizeMode="cover" style={[StyleSheet.absoluteFill, styles.photo, a]} />;
 }
 
 /** `show` is useNextConcert()'s {concert, city}: the next show from the concert API. */
@@ -88,7 +87,7 @@ export default React.memo(function HubConcert({show, onOpen, onViewAll}) {
       </Reveal>
       <Reveal>
         <View style={styles.concert}>
-          <StagePhoto uri={concert.heroImage} />
+          <StagePhoto />
           <Beam left={190} delay={0} />
           <Beam left={260} delay={-2700} />
           <Beam left={320} delay={-1300} />

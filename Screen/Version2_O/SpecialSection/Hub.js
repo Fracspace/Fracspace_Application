@@ -74,7 +74,6 @@ function concertSlide({concert, city}) {
     eyebrow: `LIVE IN ${city.city.toUpperCase()}`,
     title: `${concert.artist || concert.title}\nLive`,
     sub: `${concert.title} · ${showDate(city)}, ${city.venue}`,
-    img: concert.heroImage ? {uri: concert.heroImage} : heroSlides.find(s => s.to === 'ConcertDetails').img,
     params: {concertId: concert.id},
   };
 }
