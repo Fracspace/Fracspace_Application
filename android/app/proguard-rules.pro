@@ -31,3 +31,10 @@
 -keep class com.appsflyer.** { *; }
 -keep public class com.android.installreferrer.** { *; }
 -dontwarn com.appsflyer.**
+
+# PayU CheckoutPro: keep the SDK under R8, and ignore the optional Google Pay
+# (paisa) and Smart Lock credentials APIs it references but doesn't ship.
+-keep class com.payu.** { *; }
+-dontwarn com.payu.**
+-dontwarn com.google.android.apps.nbu.paisa.inapp.client.api.**
+-dontwarn com.google.android.gms.auth.api.credentials.**
