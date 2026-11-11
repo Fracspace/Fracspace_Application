@@ -15,7 +15,6 @@ import LinearGradient from 'react-native-linear-gradient';
 import Svg, {Circle, Defs, Path, RadialGradient, Rect, Stop} from 'react-native-svg';
 import {colors, fonts, ls} from '../theme';
 import {E, LoopGate, PressScale, kf, useLoop, useReducedMotion} from '../anim';
-import {CHECK_IN, CHECK_OUT} from './data';
 import {useFirstFrame, useRenderCount} from '../perf';
 
 const END = 2400;
@@ -181,7 +180,7 @@ function useReveal(width, height, reduced, play) {
 }
 
 /** Built hidden (`play` false: clock and reveal at 0, loops off) so it can mount ahead of time. */
-function Success({play, review, receipt, inShort, outShort, nightsLabel, guestFull, totalLabel, paidAt, insets, onHome}) {
+function Success({play, review, receipt, inShort, outShort, inTime, outTime, nightsLabel, guestFull, totalLabel, paidAt, insets, onHome}) {
   const {width, height} = useWindowDimensions();
   const reduced = useReducedMotion();
   useRenderCount('Success');
@@ -264,7 +263,7 @@ function Success({play, review, receipt, inShort, outShort, nightsLabel, guestFu
                 <View style={styles.dcol}>
                   <Text style={styles.small}>Check-in</Text>
                   <Text style={styles.date}>{inShort}</Text>
-                  <Text style={styles.small}>{`from ${CHECK_IN}`}</Text>
+                  <Text style={styles.small}>{`from ${inTime}`}</Text>
                 </View>
                 <View style={styles.nights}>
                   <Text style={styles.nightsT}>{nightsLabel}</Text>
@@ -272,7 +271,7 @@ function Success({play, review, receipt, inShort, outShort, nightsLabel, guestFu
                 <View style={[styles.dcol, styles.dcolR]}>
                   <Text style={styles.small}>Check-out</Text>
                   <Text style={styles.date}>{outShort}</Text>
-                  <Text style={styles.small}>{`by ${CHECK_OUT}`}</Text>
+                  <Text style={styles.small}>{`by ${outTime}`}</Text>
                 </View>
               </View>
               <Kv k="Guests" v={guestFull} />

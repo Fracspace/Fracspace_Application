@@ -888,6 +888,8 @@ export default function StayReview({navigation, route}) {
             receipt={paid}
             inShort={short(cin)}
             outShort={short(cout)}
+            inTime={inLabel}
+            outTime={outLabel}
             nightsLabel={nightsLabel}
             guestFull={guestFull}
             totalLabel={paid.total || totalLabel}
