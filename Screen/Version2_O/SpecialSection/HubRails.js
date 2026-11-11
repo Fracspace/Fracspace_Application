@@ -154,7 +154,7 @@ const toCard = r => ({...r, sub: r.tag || r.city, loc: r.loc.split(',')[0].trim(
 export const FeaturedStays = React.memo(function FeaturedStays({onOpenStay, onViewAll}) {
   useRenderCount('FeaturedStays');
   const {width} = useWindowDimensions();
-  const {data} = useStaysHome();
+  const {data, loading, error, refresh} = useStaysHome();
   const stays = useMemo(() => {
     const all = data?.enabled ? data.retreats : [];
     const top = all.filter(r => r.featured);
@@ -171,18 +171,51 @@ export const FeaturedStays = React.memo(function FeaturedStays({onOpenStay, onVi
   const onScroll = useAnimatedScrollHandler(e => {
     scrollX.value = e.contentOffset.x;
   });
+  const head = (
+    <SectionHead
+      tag="CURATED ESCAPES"
+      title="Featured Stays"
+      sub="Cinematic sanctuaries & architectural retreats"
+      link="View all"
+      onLink={onViewAll}
+    />
+  );
+  // First load (nothing cached yet): hold the rail's space so the sections
+  // below don't jump when the stays arrive.
+  if (loading) {
+    return (
+      <View style={{paddingTop: 38}} accessibilityLabel="Loading featured stays">
+        {head}
+        <View style={[styles.srail, styles.ghostRow]} pointerEvents="none">
+          <View style={styles.scardGhost} />
+          <View style={styles.scardGhost} />
+        </View>
+      </View>
+    );
+  }
+  // Couldn't load and nothing cached: say so, with a retry.
+  if (error && !data) {
+    return (
+      <View style={{paddingTop: 38}}>
+        {head}
+        <View style={styles.soonCard}>
+          <LinearGradient colors={[colors.cardTop, colors.cardBottom]} style={StyleSheet.absoluteFill} />
+          <Text style={styles.soonTitle}>Couldn't load stays</Text>
+          <Text style={styles.soonText}>Check your connection and try again.</Text>
+          <Pressable onPress={refresh} style={styles.retry} accessibilityRole="button">
+            <Text style={type.link}>Try again</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+  // Loaded but the server has none to feature (or stays are off).
   if (!stays.length) {
     return null;
   }
   return (
     <View style={{paddingTop: 38}}>
-      <SectionHead
-        tag="CURATED ESCAPES"
-        title="Featured Stays"
-        sub="Cinematic sanctuaries & architectural retreats"
-        link="View all"
-        onLink={onViewAll}
-      />
+      {head}
       <Animated.ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -397,6 +430,17 @@ const styles = StyleSheet.create({
   soonText: {fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 12.5 * 1.5, color: colors.muted},
   link: {flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44},
   srail: {gap: CARD_GAP, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8},
+  // Placeholder the size of a stay card (no loop: it sits still while loading).
+  scardGhost: {
+    width: CARD_W,
+    height: 356,
+    borderRadius: 28,
+    backgroundColor: colors.cardTop,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  ghostRow: {flexDirection: 'row', overflow: 'hidden'},
+  retry: {alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center'},
   scard: {
     width: CARD_W,
     height: 356,
