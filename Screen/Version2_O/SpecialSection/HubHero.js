@@ -221,7 +221,7 @@ export default function HubHero({slides, slide, onSeg, onCta, onBack, scrollY, t
     <View style={styles.hero}>
       <Animated.View style={[StyleSheet.absoluteFill, par]}>
         {slides.map((s, i) => (
-          <Slide key={s.eyebrow} slide={s} on={i === slide} width={width} />
+          <Slide key={s.to} slide={s} on={i === slide} width={width} />
         ))}
       </Animated.View>
       <LinearGradient
@@ -235,13 +235,13 @@ export default function HubHero({slides, slide, onSeg, onCta, onBack, scrollY, t
       </GlassButton>
       <View style={styles.hcopies} pointerEvents="box-none">
         {slides.map((s, i) => (
-          <Copy key={s.eyebrow} slide={s} on={i === slide} onCta={onCta} />
+          <Copy key={s.to} slide={s} on={i === slide} onCta={onCta} />
         ))}
       </View>
       <View style={styles.pager}>
         {slides.map((s, i) => (
           <Seg
-            key={s.eyebrow}
+            key={s.to}
             index={i}
             slide={slide}
             state={i === slide ? 'on' : i < slide ? 'done' : 'idle'}

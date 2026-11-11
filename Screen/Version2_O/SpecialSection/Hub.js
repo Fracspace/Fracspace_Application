@@ -20,6 +20,7 @@ import {BackIcon, GlassButton, Grain, Tag} from './HubBits';
 import HubHero, {SLIDE_MS} from './HubHero';
 import {heroSlides} from './data';
 import {useFlag} from '../../flags/useFlag';
+import {showDate, useNextConcert} from './useNextConcert';
 import HubCategories from './HubCategories';
 import {CartBar, FeaturedStays, IvaEssentials} from './HubRails';
 import HubConcert from './HubConcert';
@@ -67,6 +68,17 @@ function usePortal(width, height) {
   return {play, outer: [layout.outer, outer], inner: [layout.inner, inner]};
 }
 
+/** The concert slide's copy from the API's next show (design: "Harish Sagane\nLive"). */
+function concertSlide({concert, city}) {
+  return {
+    eyebrow: `LIVE IN ${city.city.toUpperCase()}`,
+    title: `${concert.artist || concert.title}\nLive`,
+    sub: `${concert.title} · ${showDate(city)}, ${city.venue}`,
+    img: concert.heroImage ? {uri: concert.heroImage} : heroSlides.find(s => s.to === 'ConcertDetails').img,
+    params: {concertId: concert.id},
+  };
+}
+
 export default function Hub({navigation}) {
   const {width, height} = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -86,10 +98,14 @@ export default function Hub({navigation}) {
   const flagOf = useRef({});
   flagOf.current = {Stays: stays, IvaShop: shop, ConcertDetails: concerts};
   // Hidden sections lose their slide; coming-soon ones keep it without a CTA.
+  // The next show from the concert API; undefined while loading, null if none.
+  const show = useNextConcert();
   const slides = useMemo(() => {
     const state = {Stays: stays, IvaShop: shop, ConcertDetails: concerts};
-    return heroSlides.filter(s => state[s.to] !== 'hidden').map(s => ({...s, soon: state[s.to] === 'coming_soon'}));
-  }, [stays, shop, concerts]);
+    return heroSlides
+      .filter(s => state[s.to] !== 'hidden' && (s.to !== 'ConcertDetails' || show))
+      .map(s => ({...s, soon: state[s.to] === 'coming_soon', ...(s.to === 'ConcertDetails' ? concertSlide(show) : null)}));
+  }, [stays, shop, concerts, show]);
   const count = useRef(slides.length);
   count.current = slides.length;
 
@@ -128,7 +144,7 @@ export default function Hub({navigation}) {
   );
 
   const go = useCallback(
-    to => {
+    (to, params) => {
       if (to === 'categories') {
         scrollRef.current?.scrollTo({y: categoriesY.current, animated: true});
       } else {
@@ -137,7 +153,7 @@ export default function Hub({navigation}) {
           return;
         }
         markTap(to);
-        navigation.navigate(to);
+        navigation.navigate(to, params);
       }
     },
     [navigation, scrollRef],
@@ -154,9 +170,10 @@ export default function Hub({navigation}) {
       stays: () => go('Stays'),
       shop: () => go('IvaShop'),
       concerts: () => go('ConcertDetails'),
+      openConcert: c => go('ConcertDetails', {concertId: c.id}),
       openStay: stay => navigation.navigate('StayDetail', {stayId: stay.id}),
       home: () => navigation.navigate('HomeStack', {screen: 'HomePage'}),
-      cta: s => go(s.to),
+      cta: s => go(s.to, s.params),
       seg: i => {
         setSlide(i);
         startTimer();
@@ -229,9 +246,9 @@ export default function Hub({navigation}) {
                         <IvaEssentials soon={shop === 'coming_soon'} qty={qty} setQty={setQty} onOpenShop={act.shop} />
                       </ViewportGate>
                     ) : null}
-                    {concerts === 'live' ? (
+                    {concerts === 'live' && show ? (
                       <ViewportGate>
-                        <HubConcert onOpen={act.concerts} onViewAll={act.concerts} />
+                        <HubConcert show={show} onOpen={act.openConcert} onViewAll={act.concerts} />
                       </ViewportGate>
                     ) : null}
                   </View>

@@ -10,6 +10,7 @@ import {E, Nudge, PressScale, Reveal, Sheen, kf, useLoop} from './anim';
 import {Eyebrow, LiveDot} from './HubBits';
 import {images} from './data';
 import {useRenderCount} from './perf';
+import {showDate} from './useNextConcert';
 
 // .beam: sway 5.5s ease-in-out infinite alternate, rotate -20° → 20° from the top
 function Beam({left, delay}) {
@@ -57,18 +58,22 @@ function Ripple({delay}) {
   return <Animated.View pointerEvents="none" style={[styles.ring, a]} />;
 }
 
-function StagePhoto() {
+function StagePhoto({uri}) {
   // pan 16s ease-in-out infinite alternate
   const p = useLoop(16000, {alternate: true});
   const a = useAnimatedStyle(() => {
     const t = E.easeInOut(p.value);
     return {transform: [{scale: 1.1 + 0.1 * t}, {translateX: -8 + 18 * t}]};
   });
-  return <Animated.Image source={images.concert} resizeMode="cover" style={[StyleSheet.absoluteFill, styles.photo, a]} />;
+  const source = uri ? {uri} : images.concert;
+  return <Animated.Image source={source} resizeMode="cover" style={[StyleSheet.absoluteFill, styles.photo, a]} />;
 }
 
-export default React.memo(function HubConcert({onOpen, onViewAll}) {
+/** `show` is useNextConcert()'s {concert, city}: the next show from the concert API. */
+export default React.memo(function HubConcert({show, onOpen, onViewAll}) {
   useRenderCount('HubConcert');
+  const {concert, city} = show;
+  const open = () => onOpen(concert);
   return (
     <View style={styles.sec}>
       <Reveal style={styles.head}>
@@ -83,7 +88,7 @@ export default React.memo(function HubConcert({onOpen, onViewAll}) {
       </Reveal>
       <Reveal>
         <View style={styles.concert}>
-          <StagePhoto />
+          <StagePhoto uri={concert.heroImage} />
           <Beam left={190} delay={0} />
           <Beam left={260} delay={-2700} />
           <Beam left={320} delay={-1300} />
@@ -95,9 +100,11 @@ export default React.memo(function HubConcert({onOpen, onViewAll}) {
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.body}>
-            <Eyebrow dot={<LiveDot />}>LIVE IN HYDERABAD</Eyebrow>
+            <Eyebrow dot={<LiveDot />}>{`LIVE IN ${city.city.toUpperCase()}`}</Eyebrow>
             <View style={styles.titleRow}>
-              <Text style={styles.title}>Harish Sagane</Text>
+              <Text style={styles.title} numberOfLines={2}>
+                {concert.artist || concert.title}
+              </Text>
               <View style={styles.eq}>
                 {BARS.map(([d, dl]) => (
                   <EqBar key={d} duration={d} delay={dl} />
@@ -109,15 +116,17 @@ export default React.memo(function HubConcert({onOpen, onViewAll}) {
                 <Rect x={4} y={5.5} width={16} height={14.5} rx={2.5} />
                 <Path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
               </Svg>
-              <Text style={styles.date}>14 Nov 2026 · Tavaro Resorts, Kokapet</Text>
+              <Text style={styles.date} numberOfLines={1}>
+                {showDate(city)} · {city.venue}
+              </Text>
             </View>
             <View style={styles.actions}>
-              <PressScale to={0.94} onPress={onOpen} style={styles.tix} accessibilityRole="button">
+              <PressScale to={0.94} onPress={open} style={styles.tix} accessibilityRole="button">
                 <Text style={styles.tixText}>Book Tickets</Text>
                 <Nudge style={styles.tixText} />
                 <Sheen duration={3600} rgb="255,255,255" alpha={0.75} band={[0.35, 0.5, 0.65]} angle={110} />
               </PressScale>
-              <PressScale to={0.88} duration={400} onPress={onOpen} style={styles.playr} accessibilityRole="button" accessibilityLabel="Play concert preview">
+              <PressScale to={0.88} duration={400} onPress={open} style={styles.playr} accessibilityRole="button" accessibilityLabel="Play concert preview">
                 <Ripple delay={0} />
                 <Ripple delay={1200} />
                 <Svg width={16} height={16} viewBox="0 0 24 24">
@@ -148,11 +157,11 @@ const styles = StyleSheet.create({
   beam: {position: 'absolute', top: -40, width: 80, height: 300, transformOrigin: 'top', opacity: 0.85},
   body: {flex: 1, justifyContent: 'flex-end', gap: 10, padding: 20},
   titleRow: {flexDirection: 'row', alignItems: 'center', gap: 12},
-  title: {fontFamily: fonts.extrabold, fontSize: 22, color: '#fff'},
+  title: {flexShrink: 1, fontFamily: fonts.extrabold, fontSize: 22, color: '#fff'},
   eq: {flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 18},
   eqBar: {width: 4, height: '100%', borderRadius: 2, overflow: 'hidden', transformOrigin: 'bottom'},
   dateRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
-  date: {fontFamily: fonts.regular, fontSize: 13, color: colors.softer},
+  date: {flexShrink: 1, fontFamily: fonts.regular, fontSize: 13, color: colors.softer},
   actions: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4},
   tix: {
     flexDirection: 'row',
