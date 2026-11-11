@@ -372,36 +372,29 @@ function ReviewShade() {
   );
 }
 
-/** WhatsApp chat with the concierge, else a phone call. */
-function contact(c) {
-  const wa = (c.whatsapp || '').replace(/\D/g, '');
-  if (wa) {
-    Linking.openURL(`https://wa.me/${wa}`).catch(() => {});
-  } else if (c.phone) {
-    Linking.openURL(`tel:${c.phone.replace(/[^\d+]/g, '')}`).catch(() => {});
-  }
-}
+const CONCIERGE_TEL = 'tel:+919063448275';
 
 function Concierge({c}) {
   return (
     <Reveal style={styles.concWrap}>
-      <LinearGradient colors={[colors.cardTop, colors.cardBottom]} {...CONC_DIR} style={styles.conc}>
-        <View style={styles.hs}>
-          <HeadsetIcon />
-          <Ripple duration={2600} color={colors.goldA(0.45)} />
-          <Ripple duration={2600} delay={1300} color={colors.goldA(0.45)} />
-        </View>
-        <View style={styles.concText}>
-          <Text style={styles.concTitle}>{c.title}</Text>
-          {c.subtitle ? <Text style={styles.concSub}>{c.subtitle}</Text> : null}
-        </View>
-        <PressScale to={0.92} duration={400} onPress={() => contact(c)} accessibilityLabel="Chat with concierge" style={styles.chat}>
-          <View style={styles.online}>
-            <Ripple duration={1600} color="#4ADE80" width={1.5} inset={4} />
+      <PressScale
+        to={0.97}
+        duration={400}
+        onPress={() => Linking.openURL(CONCIERGE_TEL).catch(() => {})}
+        accessibilityRole="button"
+        accessibilityLabel="Call the concierge">
+        <LinearGradient colors={[colors.cardTop, colors.cardBottom]} {...CONC_DIR} style={styles.conc}>
+          <View style={styles.hs}>
+            <HeadsetIcon />
+            <Ripple duration={2600} color={colors.goldA(0.45)} />
+            <Ripple duration={2600} delay={1300} color={colors.goldA(0.45)} />
           </View>
-          <Text style={styles.chatText}>Chat</Text>
-        </PressScale>
-      </LinearGradient>
+          <View style={styles.concText}>
+            <Text style={styles.concTitle}>{c.title}</Text>
+            {c.subtitle ? <Text style={styles.concSub}>{c.subtitle}</Text> : null}
+          </View>
+        </LinearGradient>
+      </PressScale>
     </Reveal>
   );
 }
@@ -777,16 +770,4 @@ const styles = StyleSheet.create({
   concText: {flex: 1, gap: 4},
   concTitle: {fontFamily: fonts.bold, fontSize: 15, color: '#fff'},
   concSub: {fontFamily: fonts.regular, fontSize: 12, lineHeight: 16.8, color: colors.muted},
-  chat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 44,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.goldA(0.4),
-  },
-  online: {width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#4ADE80'},
-  chatText: {fontFamily: fonts.bold, fontSize: 13, color: colors.gold},
 });
