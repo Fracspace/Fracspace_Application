@@ -19,6 +19,7 @@ import { AppProvider } from './Screen/Context/AppContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import NoInternet from './Screen/components/NoInternet';
+import ErrorBoundary from './Screen/components/ErrorBoundary';
 import { applyStatusBarForRoute } from './Screen/utils/statusBar';
 import { trackEvent, trackScreen } from './Screen/utils/analytics';
 import { recoverOpenBookings, watchOpenBookings } from './Screen/Version2_O/SpecialSection/api/recover';
@@ -566,6 +567,7 @@ const App = () => {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <Provider store={store}>
             <AppProvider>
+              <ErrorBoundary>
               <NavigationContainer
                 ref={navigationRef}
                 linking={linking}
@@ -598,6 +600,7 @@ const App = () => {
               >
                 <NavigationStack />
               </NavigationContainer>
+              </ErrorBoundary>
               {!isConnected && (
                 <View style={styles.offlineOverlay}>
                   <NoInternet onRetry={checkConnection} />
