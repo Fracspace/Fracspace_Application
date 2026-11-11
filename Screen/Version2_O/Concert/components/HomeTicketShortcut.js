@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +18,40 @@ const PAGE = 20;
 const REFETCH_MS = 60 * 1000;
 // Shared across mounts so leaving and re-entering home does not re-fetch.
 let lastFetch = { token: null, at: 0 };
+// The server read in flight, and every mounted bar waiting for it. Home swaps
+// to its skeleton while it loads (right after login especially), which
+// unmounts this bar mid-request; the bar that mounts next must still get the
+// answer, not skip the fetch as "recent" and keep showing an empty copy.
+let inflight = null;
+const listeners = new Set();
+
+function refresh(token) {
+  const now = Date.now();
+  if (lastFetch.token === token && now - lastFetch.at < REFETCH_MS) return;
+  if (inflight && inflight.token === token) return;
+  const run = (async () => {
+    try {
+      // All statuses, not just confirmed: a refunded booking must come
+      // back so its saved "valid" ticket is overwritten.
+      const res = await GetMyConcertBookings({ limit: PAGE, token });
+      const { bookings, pagination } = normalizeBookingList(res?.data);
+      const complete = (pagination.pages || 1) <= 1;
+      await saveTickets(bookings, { complete });
+      // Marked fresh only once the copy is saved, so a bar reading it now
+      // sees these tickets.
+      lastFetch = { token, at: Date.now() };
+      // A complete answer is the truth; only a multi-page list keeps the
+      // saved rows it did not include.
+      const next = complete ? bookings : await loadSavedTickets();
+      listeners.forEach(fn => fn(token, next));
+    } catch (_) {
+      // offline or server trouble: keep what the saved copy showed
+    } finally {
+      if (inflight && inflight.run === run) inflight = null;
+    }
+  })();
+  inflight = { token, run };
+}
 
 /**
  * "Your ticket" bar on the home screen: one tap from launch to the entry QR.
@@ -31,41 +65,38 @@ export default function HomeTicketShortcut() {
   // Every saved/fetched booking; what to show is derived on render so the
   // card switches to "live" as soon as a check-in arrives.
   const [list, setList] = useState([]);
-  const alive = useRef(true);
 
   useFocusEffect(
     useCallback(() => {
-      alive.current = true;
+      let alive = true;
+      let myToken = null;
+      let gotFresh = false;
+      // A fetch started by an earlier (unmounted) bar lands here too.
+      const onFresh = (token, next) => {
+        if (alive && token === myToken) {
+          gotFresh = true;
+          setList(next);
+        }
+      };
+      listeners.add(onFresh);
       (async () => {
         const token = await AsyncStorage.getItem('mytoken');
+        if (!alive) return;
+        myToken = token;
         if (!token) {
-          if (alive.current) setList([]);
+          setList([]);
           return;
         }
         const saved = await loadSavedTickets();
-        if (alive.current) setList(saved);
+        // The server's answer may have landed while the copy was being read.
+        if (alive && !gotFresh) setList(saved);
         // Home is visited constantly; one server read a minute is plenty.
         // My tickets and Booking Summary refresh on their own focus.
-        const now = Date.now();
-        if (lastFetch.token === token && now - lastFetch.at < REFETCH_MS) return;
-        try {
-          // All statuses, not just confirmed: a refunded booking must come
-          // back so its saved "valid" ticket is overwritten.
-          const res = await GetMyConcertBookings({ limit: PAGE, token });
-          const { bookings, pagination } = normalizeBookingList(res?.data);
-          lastFetch = { token, at: Date.now() };
-          const complete = (pagination.pages || 1) <= 1;
-          await saveTickets(bookings, { complete });
-          if (!alive.current) return;
-          // A complete answer is the truth; only a multi-page list keeps the
-          // saved rows it did not include.
-          setList(complete ? bookings : await loadSavedTickets());
-        } catch (_) {
-          // offline or server trouble: keep what the saved copy showed
-        }
+        if (alive) refresh(token);
       })();
       return () => {
-        alive.current = false;
+        alive = false;
+        listeners.delete(onFresh);
       };
     }, []),
   );
