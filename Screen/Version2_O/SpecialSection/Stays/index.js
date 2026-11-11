@@ -1,5 +1,5 @@
 // Stays listing (Stays.dc.html): "Explore stays" / "My bookings" tabs.
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {StyleSheet, Text, View, useWindowDimensions} from 'react-native';
 import Animated, {
   interpolateColor,
@@ -17,7 +17,7 @@ import {markTap, useFirstFrame, useJsFps, useRenderCount} from '../perf';
 import {SearchIcon, TicketIcon} from './icons';
 import Explore, {SearchBar} from './Explore';
 import Bookings from './Bookings';
-import SearchSheet, {initialSearch, tripDates} from './SearchSheet';
+import SearchSheet, {initialSearch, placesFrom, tripDates} from './SearchSheet';
 import {useStaysHome, ymd} from '../api/stays';
 import {ErrorCard} from '../api/ui';
 
@@ -92,6 +92,7 @@ export default function Stays({navigation, route}) {
   }, [asked]);
   const home = useStaysHome();
   const paused = home.data && !home.data.enabled;
+  const places = useMemo(() => placesFrom(home.data?.retreats), [home.data]);
   const [searchTop, setSearchTop] = useState(0);
   // Applied search choices (the capsules read them). The sheet edits its own
   // copy and hands it back on close, so its taps re-render only the sheet.
@@ -193,7 +194,7 @@ export default function Stays({navigation, route}) {
         ) : null}
         <Grain />
       </LoopGate>
-      {sheetStep ? <SearchSheet init={search} step={sheetStep} onClose={closeSheet} /> : null}
+      {sheetStep ? <SearchSheet init={search} step={sheetStep} places={places} onClose={closeSheet} /> : null}
     </View>
   );
 }

@@ -151,6 +151,15 @@ function Chips({cities, search, patch, openSearch}) {
       {search.applied ? (
         <>
           {ac ? city(ac) : null}
+          {search.query.trim() ? (
+            <Chip
+              key="query"
+              label={`“${search.query.trim()}”`}
+              on
+              aria={`Search ${search.query.trim()}, clear`}
+              onPress={() => patch({query: ''})}
+            />
+          ) : null}
           <Chip key="dates" label={when} on aria={`Dates ${when}, change`} onPress={() => openSearch('when')} />
           <Chip key="guests" label={who} on aria={`${who}, change`} onPress={() => openSearch('who')} />
           {cities.filter(c => c !== ac).map(city)}
@@ -233,8 +242,12 @@ function RetreatCard({r, i, sx, vw, liked, onLike, onOpen}) {
   );
 }
 
-function Retreats({retreats, total, city, onClear, liked, onLike, onOpen}) {
-  const list = !retreats ? [] : city ? retreats.filter(r => r.loc.includes(city)) : retreats;
+function Retreats({retreats, city, query, onClear, liked, onLike, onOpen}) {
+  const q = query.toLowerCase();
+  const list = !retreats
+    ? []
+    : retreats.filter(r => (!city || r.loc.includes(city)) && (!q || `${r.name} ${r.loc}`.toLowerCase().includes(q)));
+  const filtered = !!(city || q);
   const {width: vw} = useWindowDimensions();
   const sx = useSharedValue(0);
   const max = useSharedValue(1);
@@ -254,11 +267,13 @@ function Retreats({retreats, total, city, onClear, liked, onLike, onOpen}) {
       </Reveal>
       {retreats && list.length === 0 ? (
         <View style={styles.none}>
-          <Text style={styles.noneTitle}>{city ? `Stays in ${city} are coming soon` : 'New stays are coming soon'}</Text>
-          <Text style={styles.noneSub}>
-            {city ? 'Explore our other destinations meanwhile.' : 'We are adding new retreats. Check back shortly.'}
+          <Text style={styles.noneTitle}>
+            {q ? `No stays match “${query}”` : city ? `Stays in ${city} are coming soon` : 'New stays are coming soon'}
           </Text>
-          {city ? (
+          <Text style={styles.noneSub}>
+            {filtered ? 'Explore our other destinations meanwhile.' : 'We are adding new retreats. Check back shortly.'}
+          </Text>
+          {filtered ? (
             <Pressable onPress={onClear} style={styles.noneBtn}>
               <Text style={styles.noneBtnText}>Show all stays →</Text>
             </Pressable>
@@ -292,7 +307,7 @@ function Retreats({retreats, total, city, onClear, liked, onLike, onOpen}) {
         <View style={styles.track}>
           <Animated.View style={[styles.thumb, thumb]} />
         </View>
-        <Text style={styles.trackText}>{retreats ? `Showing ${list.length} of ${Math.max(total, list.length)} destinations` : ' '}</Text>
+        <Text style={styles.trackText}>{retreats ? `Showing ${list.length} of ${retreats.length} ${retreats.length === 1 ? 'stay' : 'stays'}` : ' '}</Text>
       </View>
     </View>
   );
@@ -493,9 +508,9 @@ export default memo(function Explore({data, error, onRetry, onSearchTop, onOpenS
       ) : (
         <Retreats
           retreats={d?.retreats}
-          total={d?.total || 0}
           city={search.pillCity}
-          onClear={() => patch({pillCity: ''})}
+          query={search.applied ? search.query.trim() : ''}
+          onClear={() => patch({pillCity: '', query: ''})}
           liked={likedMap} onLike={onLike} onOpen={onOpenStay} />
       )}
 

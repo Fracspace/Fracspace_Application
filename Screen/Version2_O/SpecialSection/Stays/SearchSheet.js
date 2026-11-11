@@ -92,9 +92,34 @@ export function tripDates(s) {
   return {cin, cout};
 }
 
-const whereLabel = s => (s.city === 'Hyderabad' ? 'Banjara Hills, Hyderabad, Telangana' : s.city || 'Anywhere');
+const whereLabel = s => s.city || (s.query.trim() ? `“${s.query.trim()}”` : 'Anywhere');
 const fmtDay = d => (d ? DAYS[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() : 'Add date');
-const stayCount = c => searchStays.filter(x => x.city === c).length;
+
+// Card heights of the two-column destination grid, in turn.
+const PLACE_H = [240, 180, 190, 250];
+
+/**
+ * Destination cards from the live stays: one per city, with its stays (for
+ * the search box) and the first stay's photo. Falls back to the mock list
+ * while the listing hasn't loaded.
+ */
+export function placesFrom(retreats) {
+  if (!retreats?.length) {
+    return searchCities.map(c => ({...c, stays: searchStays.filter(x => x.city === c.city)}));
+  }
+  const by = new Map();
+  retreats.forEach(r => {
+    const city = r.city || (r.loc || '').split(',').pop().trim();
+    if (!city) {
+      return;
+    }
+    if (!by.has(city)) {
+      by.set(city, {city, img: r.img, stays: []});
+    }
+    by.get(city).stays.push({name: r.name, area: r.loc});
+  });
+  return [...by.values()].map((c, i) => ({...c, h: PLACE_H[i % PLACE_H.length], col: i % 2 ? 'R' : 'L'}));
+}
 
 // `fcIn` / `pcIn` / `dpop` entrances.
 const OUT = Easing.bezier(0.2, 0.9, 0.25, 1);
@@ -130,7 +155,7 @@ const Place = memo(function Place({c, on, onPick}) {
     opacity: Math.min(1, chk.value * 1.6),
     transform: [{scale: 0.4 + 0.6 * chk.value}],
   }));
-  const n = stayCount(c.city);
+  const n = c.stays.length;
   return (
     <Animated.View entering={PLACE_IN[c.col]}>
       <PressScale
@@ -190,16 +215,15 @@ function GoaArt() {
   );
 }
 
-function Where({s, patch}) {
+function Where({s, patch, places}) {
   const [focus, setFocus] = useState(false);
   const q = s.query.trim().toLowerCase();
   const list = q
-    ? searchCities.filter(
-        c =>
-          c.city.toLowerCase().includes(q) ||
-          searchStays.some(x => x.city === c.city && (x.name + ' ' + x.area).toLowerCase().includes(q)),
+    ? places.filter(
+        c => c.city.toLowerCase().includes(q) || c.stays.some(x => (x.name + ' ' + x.area).toLowerCase().includes(q)),
       )
-    : searchCities;
+    : places;
+  const stays = places.reduce((n, c) => n + c.stays.length, 0);
   const pick = useCallback(city => patch({city, query: ''}), [patch]);
   const col = side =>
     list.filter(c => c.col === side).map(c => <Place key={c.city} c={c} on={s.city === c.city} onPick={pick} />);
@@ -207,13 +231,16 @@ function Where({s, patch}) {
     <Animated.View entering={cardIn} style={styles.fcard}>
       <View style={styles.row}>
         <Text style={styles.fh}>Where?</Text>
-        <Text style={styles.muted12}>6 stays · 4 destinations</Text>
+        <Text style={styles.muted12}>
+          {stays} {stays === 1 ? 'stay' : 'stays'} · {places.length} {places.length === 1 ? 'destination' : 'destinations'}
+        </Text>
       </View>
       <View style={[styles.fsrch, focus && styles.fsrchOn]}>
         <SearchIcon size={18} color="#8E887F" />
         <TextInput
           value={s.query}
-          onChangeText={query => patch({query})}
+          // Typing starts a new search: the picked city would hide its results.
+          onChangeText={query => patch({query, city: ''})}
           onFocus={() => setFocus(true)}
           onBlur={() => setFocus(false)}
           placeholder="Search a city, area or stay"
@@ -226,7 +253,7 @@ function Where({s, patch}) {
         <View style={styles.pcol}>{col('L')}</View>
         <View style={styles.pcol}>{col('R')}</View>
       </View>
-      {list.length === 0 ? <Text style={styles.noCity}>No destinations match — try Hyderabad or Munnar</Text> : null}
+      {list.length === 0 ? <Text style={styles.noCity}>No destinations match — try another city or stay name</Text> : null}
     </Animated.View>
   );
 }
@@ -464,7 +491,7 @@ function useIosKeyboardHeight() {
   return h;
 }
 
-export default function SearchSheet({init, step: initStep, onClose}) {
+export default function SearchSheet({init, step: initStep, places, onClose}) {
   const insets = useSafeAreaInsets();
   const kb = useIosKeyboardHeight();
   const [s, setS] = useState(() => ({...init, step: initStep}));
@@ -520,7 +547,7 @@ export default function SearchSheet({init, step: initStep, onClose}) {
           {s.step === 'who' ? (
             <Summary label="WHEN" value={whenLabel(s)} right onPress={() => patch({step: 'when'})} />
           ) : null}
-          {s.step === 'where' ? <Where key="where" s={s} patch={patch} /> : null}
+          {s.step === 'where' ? <Where key="where" s={s} patch={patch} places={places} /> : null}
           {s.step === 'when' ? <When key="when" s={s} patch={patch} /> : null}
           {s.step === 'who' ? <Who key="who" s={s} patch={patch} /> : null}
         </ScrollView>

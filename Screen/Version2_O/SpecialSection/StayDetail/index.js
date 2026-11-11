@@ -26,7 +26,7 @@ import BookingBar from './BookingBar';
 import PolicySheet from './PolicySheet';
 import {markTap, useFirstFrame, useJsFps, useRenderCount} from '../perf';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {booking, inr} from './data';
+import {inr} from './data';
 import {defaultDates, short} from '../StayReview/data';
 import {createHold, day, money, releaseBooking, roomsFor, stayTotal, useStayDetail} from '../api/stays';
 import {errText, serverNow, USE_MOCK} from '../api/client';
@@ -106,6 +106,12 @@ const Toast = forwardRef(function Toast({top}, ref) {
 
 /** The scrolling page; memoised so the Reserve bar and sheets don't re-render it. */
 const ABOUT_LINES = 4;
+/** The search's dates, unless they have passed since (then tomorrow, one night). */
+const tripDates = trip =>
+  trip?.checkIn && day(trip.checkIn) >= defaultDates().cin
+    ? {cin: day(trip.checkIn), cout: day(trip.checkOut)}
+    : defaultDates();
+
 const guests = b => {
   const n = (b.adults || 1) + (b.children || 0);
   return `${n} guest${n > 1 ? 's' : ''}${b.rooms > 1 ? ` · ${b.rooms} rooms` : ''}`;
@@ -351,9 +357,7 @@ export default function StayDetail({navigation, route}) {
         setPhase('idle');
         return;
       }
-      // The search's dates, unless they have passed since (then tomorrow).
-      const dated = trip?.checkIn && day(trip.checkIn) >= defaultDates().cin;
-      const {cin, cout} = dated ? {cin: day(trip.checkIn), cout: day(trip.checkOut)} : defaultDates();
+      const {cin, cout} = tripDates(trip);
       // The search's guests: as many rooms of this suite as they need.
       const want = {a: trip?.adults || 1, c: cur.maxChildren ? trip?.children || 0 : 0};
       const rooms = roomsFor(want.a, want.c, cur);
@@ -397,8 +401,7 @@ export default function StayDetail({navigation, route}) {
         suiteName: cur.name,
         price: cur.price,
         total,
-        dates: booking.dates,
-        guests: booking.guests,
+        guests: trip?.adults || 1,
         // For Review Booking's API step: the property and room as loaded here.
         propertyId: stay.id,
         stay: {name: stay.name, short: stay.short, rate: stay.rate, address: stay.address, taxPct: stay.taxPct},
@@ -413,7 +416,11 @@ export default function StayDetail({navigation, route}) {
     ? `${short(day(held.checkIn))} – ${short(day(held.checkOut))} · ${guests(held)} · ₹${money(
         held.pricing?.total,
       )} incl. taxes`
-    : `${booking.dates} · ${booking.guests} guest · ₹${totalLabel} incl. taxes`;
+    : (() => {
+        // Test data (no hold): the search's dates and guests.
+        const {cin, cout} = tripDates(trip);
+        return `${short(cin)} – ${short(cout)} · ${guests(trip || {})} · ₹${totalLabel} incl. taxes`;
+      })();
 
   // A stay that no longer exists (404) goes back to the listing.
   const gone = q.error?.status === 404;
