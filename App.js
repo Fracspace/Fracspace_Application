@@ -22,6 +22,7 @@ import NoInternet from './Screen/components/NoInternet';
 import { applyStatusBarForRoute } from './Screen/utils/statusBar';
 import { trackEvent, trackScreen } from './Screen/utils/analytics';
 import { recoverOpenBookings, watchOpenBookings } from './Screen/Version2_O/SpecialSection/api/recover';
+import './Screen/flags/flagStore'; // app flags: saved copy now, fresh copy in the background
 
 // OTA updates: Stallion on both platforms.
 import * as Stallion from 'react-native-stallion';
