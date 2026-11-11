@@ -85,7 +85,9 @@ const LoopActive = createContext(makeMutable(true));
 /** Pauses (and resets) every useLoop below it while `active` is false. */
 export function LoopGate({active, children}) {
   const parent = useContext(LoopActive);
-  const own = useSharedValue(active && parent.value);
+  // Not read from `parent` here (no shared-value reads during render); the
+  // reaction below ANDs the parent in on the first frame.
+  const own = useSharedValue(active);
   const act = useSharedValue(active);
   useEffect(() => {
     act.value = active;
@@ -392,7 +394,7 @@ export function ViewportGate({style, children, margin = 120}) {
   const ref = useRef(null);
   const top = useSharedValue(0);
   const height = useSharedValue(1e9);
-  const own = useSharedValue(parent.value);
+  const own = useSharedValue(true); // the reaction below sets it on the first frame
   const vh = ctx?.viewportH ?? 800;
   const scrollY = ctx?.scrollY;
 
@@ -439,7 +441,7 @@ export function ViewportGate({style, children, margin = 120}) {
  */
 export function RailGate({sx, left, width, viewportW, margin = 40, children}) {
   const parent = useContext(LoopActive);
-  const own = useSharedValue(parent.value);
+  const own = useSharedValue(true); // the reaction below sets it on the first frame
   useAnimatedReaction(
     () => parent.value && left + width > sx.value - margin && left < sx.value + viewportW + margin,
     on => {
