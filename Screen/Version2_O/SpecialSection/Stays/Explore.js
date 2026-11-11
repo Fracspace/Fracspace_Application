@@ -383,7 +383,13 @@ function Concierge({c}) {
         onPress={() => Linking.openURL(CONCIERGE_TEL).catch(() => {})}
         accessibilityRole="button"
         accessibilityLabel="Call the concierge">
-        <LinearGradient colors={[colors.cardTop, colors.cardBottom]} {...CONC_DIR} style={styles.conc}>
+        {/* A plain View hosts the content: on iOS a LinearGradient container clips it to its padding. */}
+        <View style={styles.conc}>
+          <LinearGradient
+            colors={[colors.cardTop, colors.cardBottom]}
+            {...CONC_DIR}
+            style={[StyleSheet.absoluteFill, styles.concBg]}
+          />
           <View style={styles.hs}>
             <HeadsetIcon />
             <Ripple duration={2600} color={colors.goldA(0.45)} />
@@ -393,7 +399,7 @@ function Concierge({c}) {
             <Text style={styles.concTitle}>{c.title}</Text>
             {c.subtitle ? <Text style={styles.concSub}>{c.subtitle}</Text> : null}
           </View>
-        </LinearGradient>
+        </View>
       </PressScale>
     </Reveal>
   );
@@ -759,6 +765,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderStrong,
   },
+  concBg: {borderRadius: 24},
   hs: {
     width: 52,
     height: 52,
