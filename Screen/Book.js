@@ -11,7 +11,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useContext, useEffect, useState} from 'react';
+import {useContext, useEffect, useRef, useState} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import MaterialDesignIcons from 'react-native-vector-icons/Feather';
 import Entypo from 'react-native-vector-icons/Entypo';
@@ -109,7 +109,13 @@ const [summaryModal, setSummaryModal] = useState(false);
     }
   };
 
+    // One payment request at a time: a second tap would make a second txnid.
+    const payingRef = useRef(false);
     const handlePayment = async () => {
+    if (payingRef.current) {
+      return;
+    }
+    payingRef.current = true;
     try {
       const txnid = `fracspace${Date.now()}${Math.floor(Math.random() * 1000)}`;
     //  const totalAmount = totalAmount
@@ -158,6 +164,8 @@ const [summaryModal, setSummaryModal] = useState(false);
       } else {
         Alert.alert('Error', error?.message || 'Something went wrong');
       }
+    } finally {
+      payingRef.current = false;
     }
   };
 

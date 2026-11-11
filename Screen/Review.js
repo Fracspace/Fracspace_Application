@@ -9,7 +9,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
-import React, {useContext, useEffect, useState} from 'react';
+import React, {useContext, useEffect, useRef, useState} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 import IconF from 'react-native-vector-icons/FontAwesome6';
@@ -82,7 +82,17 @@ export default function Review(props) {
     }
   };
 
+  // One payment request at a time: a second tap while the first is in flight
+  // would make a second txnid and a second PayU form.
+  const payingRef = useRef(false);
+  const [paying, setPaying] = useState(false);
+
   const handlePayment = async () => {
+  if (payingRef.current) {
+    return;
+  }
+  payingRef.current = true;
+  setPaying(true);
   try {
     const txnid = `fracspace${Date.now()}${Math.floor(Math.random() * 1000)}`;
     const totalAmount =
@@ -124,6 +134,9 @@ export default function Review(props) {
     } else {
       Alert.alert('Error', error?.message || 'Something went wrong');
     }
+  } finally {
+    payingRef.current = false;
+    setPaying(false);
   }
 };
 
@@ -575,6 +588,7 @@ export default function Review(props) {
             width: '100%',
             // padding: 15,
           }}
+          disabled={paying}
           onPress={() => {
             // handlePayment();
             //console.log(ItineraryKey);
