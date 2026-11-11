@@ -2,8 +2,32 @@
 // time, the resend cooldown, input checks and request error alerts.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const RESEND_SECONDS = 30;
+
+/**
+ * Saves the login (token + email) in one write, or not at all. App start needs
+ * both (NavigationStack: the profile call is by email), so saving only one left
+ * users half logged in. Throws when either is missing or the write fails; the
+ * caller then stays on the login screen.
+ */
+export async function saveSession({ token, email }) {
+  if (!token || !email) {
+    throw new Error('Sign-in response is missing the token or email');
+  }
+  try {
+    await AsyncStorage.multiSet([['mytoken', String(token)], ['Email', String(email)]]);
+  } catch (e) {
+    await AsyncStorage.multiRemove(['mytoken', 'Email']).catch(() => {});
+    throw e;
+  }
+}
+
+/** Shown when saveSession fails: nothing was saved, so the user just retries. */
+export function alertSessionNotSaved() {
+  Alert.alert('Couldn’t sign you in', 'Something went wrong while signing you in. Please try again.');
+}
 
 /**
  * Runs one request at a time: taps while one is running are ignored.

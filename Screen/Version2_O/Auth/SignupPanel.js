@@ -21,7 +21,7 @@ import { AppContext } from '../../Context/AppContext';
 import { trackSignUp } from '../../utils/analytics';
 import useOtpAutofill, { OTP_LENGTH } from '../../utils/useOtpAutofill';
 import { BackButton, CountryCode, Field, GoldButton, Heading, OtpBoxes, Pane, Swap } from './AuthUI';
-import { alertRequestError, formatSeconds, isValidEmail, isValidName, isValidPhone, onlyDigits, phoneMaxLength, useCooldown, useSingleFlight } from './authFlow';
+import { alertRequestError, alertSessionNotSaved, formatSeconds, isValidEmail, isValidName, isValidPhone, onlyDigits, phoneMaxLength, saveSession, useCooldown, useSingleFlight } from './authFlow';
 
 /**
  * Sign-up steps (details → OTP), shown inside LoginSignup's screen next to
@@ -165,9 +165,16 @@ const handleOTPLogin = async () => {
       const token = response.data.data;
       console.log('[OTP Login Success] Token received:', token);
 
-      // Save auth data
-      await AsyncStorage.setItem('mytoken', token);
-      await AsyncStorage.setItem('Email', email.trim());
+      // Token and email are saved together or not at all (see saveSession), so
+      // a failed write can't leave a token on disk behind a "wrong code" alert.
+      const userEmail = response.data.email || email.trim();
+      try {
+        await saveSession({ token, email: userEmail });
+      } catch (e) {
+        console.error('[Signup] Session not saved:', e);
+        alertSessionNotSaved();
+        return;
+      }
 
       // Standard Firebase "sign_up" event (never the email: GA terms). The
       // helper can't throw, so analytics can't fail a signup.
@@ -176,7 +183,7 @@ const handleOTPLogin = async () => {
       setGlobalState(prev => ({
         ...prev,
         token,
-        userEmail: email.trim(),
+        userEmail,
         userName: response.data.userName,
       }));
 

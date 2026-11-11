@@ -8,7 +8,7 @@ import { AppContext } from '../../Context/AppContext'
 import { trackLogin } from '../../utils/analytics';
 import useOtpAutofill, { OTP_LENGTH } from '../../utils/useOtpAutofill';
 import { BackButton, CountryCode, Field, GoldButton, Heading, OtpBoxes, Pane, Swap } from './AuthUI';
-import { alertRequestError, formatSeconds, isValidEmail, isValidPhone, onlyDigits, phoneMaxLength, useCooldown, useSingleFlight } from './authFlow';
+import { alertRequestError, alertSessionNotSaved, formatSeconds, isValidEmail, isValidPhone, onlyDigits, phoneMaxLength, saveSession, useCooldown, useSingleFlight } from './authFlow';
 
 /**
  * Login steps (phone/email → OTP), shown inside LoginSignup's screen so the
@@ -41,11 +41,16 @@ export default function LoginPanel({ active, onSwitch, showToast }) {
 
 const handleLoginSuccess = async (resData, fallbackPhone) => {
   // console.log("Res dTA: ", resData);
+  // Token and email are saved together or not at all; if that fails the user
+  // stays here and can retry, instead of landing in the app half logged in.
   try {
-    // Save auth data
-    await AsyncStorage.setItem('mytoken', resData?.data);
-    await AsyncStorage.setItem('Email', resData?.email);
-
+    await saveSession({ token: resData?.data, email: resData?.email });
+  } catch (e) {
+    console.error('[Login] Session not saved:', e);
+    alertSessionNotSaved();
+    return;
+  }
+  try {
     setGlobalState((prevState) => ({
       ...prevState,
       userName: resData?.userName,
@@ -100,7 +105,7 @@ const handleLoginSuccess = async (resData, fallbackPhone) => {
     });
   } catch (error) {
     console.error('Error in handleLoginSuccess:', error);
-    // Fallback navigation
+    // The session is saved by now, so going in is safe. Fallback navigation
     navigation.reset({
       index: 0,
       routes: [{ name: 'BottomNavigations' }],
