@@ -7,6 +7,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const memory = new Map();
 const diskKey = key => 'ss:q:' + key;
+// One request per key at a time: screens that read the same data (the Hub's
+// Stays card and Featured Stays rail, say) share it instead of each fetching.
+const pending = new Map();
+
+function load(key, fetcher, persist) {
+  let p = pending.get(key);
+  if (!p) {
+    p = fetcher()
+      .then(data => {
+        memory.set(key, data);
+        if (persist) {
+          AsyncStorage.setItem(diskKey(key), JSON.stringify(data)).catch(() => {});
+        }
+        return data;
+      })
+      .finally(() => pending.delete(key));
+    pending.set(key, p);
+  }
+  return p;
+}
 
 /** Drop cached copies whose key starts with `prefix` (e.g. after a booking). */
 export function invalidate(prefix) {
@@ -47,13 +67,8 @@ export function useQuery(key, fetcher, {mock, persist = true} = {}) {
         .catch(() => {});
     }
     const task = InteractionManager.runAfterInteractions(() => {
-      fetchRef
-        .current()
+      load(key, fetchRef.current, persist)
         .then(data => {
-          memory.set(key, data);
-          if (persist) {
-            AsyncStorage.setItem(diskKey(key), JSON.stringify(data)).catch(() => {});
-          }
           if (live) {
             setState({key, data, error: null});
           }

@@ -8,6 +8,23 @@ import {colors, fonts, type} from './theme';
 import {E, LoopGate, PressScale, Reveal, Sheen, cssAngle, kf, useLoop} from './anim';
 import {useRenderCount} from './perf';
 import {ArrowCircle, MTag, Tag} from './HubBits';
+import {useStaysHome} from './api/stays';
+
+/**
+ * How many stays the Stays screen lists (its /home retreats). The
+ * pill keeps its space (invisible) until the count is known, so the card
+ * doesn't jump when it arrives.
+ */
+function StaysCount() {
+  const {data} = useStaysHome();
+  const n = data?.retreats?.length;
+  const known = typeof n === 'number' && n > 0;
+  return (
+    <View style={known ? null : styles.hide}>
+      <MTag>{known ? `${n} ${n === 1 ? 'RETREAT' : 'RETREATS'}` : 'RETREATS'}</MTag>
+    </View>
+  );
+}
 
 const CARD_ANGLE = cssAngle(160);
 const K = 44 / 40; // the 40-unit icons are drawn at 44px
@@ -219,7 +236,7 @@ export default React.memo(function HubCategories({stays, shop, concerts, onStays
                 {stays === 'live' ? <ArrowCircle /> : null}
               </View>
               <Text style={[styles.h3, dim(stays)]}>Stays</Text>
-              {stays === 'live' ? <MTag>40+ RETREATS</MTag> : <Tag>COMING SOON</Tag>}
+              {stays === 'live' ? <StaysCount /> : <Tag>COMING SOON</Tag>}
               <Text style={[styles.meta, dim(stays)]}>Hotels · Villas · Resorts</Text>
             </CatCard>
           ) : null}
@@ -260,6 +277,7 @@ export default React.memo(function HubCategories({stays, shop, concerts, onStays
 });
 
 const styles = StyleSheet.create({
+  hide: {opacity: 0},
   sec: {paddingTop: 5, paddingHorizontal: 20},
   head: {flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16},
   grid: {flexDirection: 'row', gap: 12},
