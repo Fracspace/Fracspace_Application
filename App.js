@@ -99,6 +99,15 @@ const STAY_BOOKINGS = {
   screen: 'BottomNavigations',
   params: { screen: 'SpecialSectionStack', params: { screen: 'Stays', params: { view: 'bookings' } } },
 };
+// Stays listing, and one stay's detail (shared links).
+const STAYS_LIST = {
+  screen: 'BottomNavigations',
+  params: { screen: 'SpecialSectionStack', params: { screen: 'Stays' } },
+};
+const stayDetailLink = stayId => ({
+  screen: 'BottomNavigations',
+  params: { screen: 'SpecialSectionStack', params: { screen: 'StayDetail', params: { stayId: String(stayId) } } },
+});
 const STAY_NEWS = {
   confirmed: name => ['Booking confirmed', `Your payment for ${name} went through.`],
   pending: name => ['Checking your payment', `We're checking your payment for ${name}. If it didn't go through, the room and any wallet amount are freed automatically.`],
@@ -330,6 +339,10 @@ const App = () => {
       };
     } else if (data.deep_link_value === 'stay_bookings') {
       redirectData = STAY_BOOKINGS;
+    } else if (data.deep_link_value === 'stay_detail') {
+      // A stay shared from Stay Detail; deep_link_sub1 is its slug (or id).
+      const stayId = data?.deep_link_sub1 || data?.af_sub1 || null;
+      redirectData = stayId ? stayDetailLink(stayId) : STAYS_LIST;
     } else if (data.deep_link_value === 'dreamscape_section') {
       redirectData = {
         screen: 'BottomNavigations',

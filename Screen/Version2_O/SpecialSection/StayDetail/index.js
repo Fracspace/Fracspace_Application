@@ -1,7 +1,7 @@
 // Stay Detail (StayDetail.dc.html): hero gallery, suites, amenities, good to
 // know, nearby map, Reserve bar with the "Room held" sheet, policy sheet.
 import React, {forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState} from 'react';
-import {Alert, BackHandler, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
+import {Alert, BackHandler, Share, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
 import Animated, {
   runOnJS,
   useAnimatedReaction,
@@ -33,6 +33,7 @@ import {errText, serverNow, USE_MOCK} from '../api/client';
 import {own} from '../api/openBookings';
 import {pendingFor} from '../api/recover';
 import {ErrorCard, Skeleton} from '../api/ui';
+import {trackEvent} from '../../../utils/analytics';
 
 const CARD = cssAngle(160);
 const clamp01 = v => {
@@ -290,7 +291,27 @@ export default function StayDetail({navigation, route}) {
     () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Stays')),
     [navigation],
   );
-  const share = useCallback(() => toast.current?.show(), []);
+  // OneLink: opens this stay in the app (App.js tryNavigate, 'stay_detail'),
+  // or the store first and then the stay after install. Logged-out guests log
+  // in or sign up, then land here.
+  const share = useCallback(async () => {
+    if (!stay) {
+      return;
+    }
+    const key = stay.slug || stay.id;
+    // The bare template, not a short link: a short link (e.g. oh6t4r97) carries
+    // its own deep_link_value from the AppsFlyer dashboard, which wins over ours.
+    const link = `https://fracspace.onelink.me/OVdL?deep_link_value=stay_detail&deep_link_sub1=${encodeURIComponent(key)}`;
+    const where = stay.address ? ` in ${stay.address}` : '';
+    try {
+      const res = await Share.share({message: `Check out ${stay.name}${where} on Fracspace.\n\n${link}`});
+      if (res.action === Share.sharedAction) {
+        trackEvent('share_stay', {stay_id: String(key).slice(0, 100)});
+      }
+    } catch (e) {
+      toast.current?.show("Couldn't open sharing. Please try again.");
+    }
+  }, [stay]);
   // The room held by Reserve (POST /holds). Released if the guest picks another
   // suite or leaves without continuing; Review Booking owns it once opened.
   const [held, setHeld] = useState(null);
