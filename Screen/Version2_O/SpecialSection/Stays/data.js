@@ -32,9 +32,9 @@ export const retreats = [
 
 // secs drives the progress segments; stayId is where "Book this stay" goes.
 export const reels = [
-  {id: 'r1', title: 'Inside Dreamscape', dur: '0:12', secs: 12, loc: 'Munnar', stayId: 'ht', img: images.balcony},
-  {id: 'r2', title: 'Elevated Living', dur: '0:07', secs: 7, loc: 'Munnar', stayId: 'ht', img: images.hilltop},
-  {id: 'r3', title: 'A misty escape', dur: '0:09', secs: 9, loc: 'Munnar', stayId: 'ht', img: images.luxury},
+  {id: 'r1', title: 'Inside Dreamscape', dur: '0:12', secs: 12, loc: 'Munnar', stayId: 'ht', stayName: 'Hilltop by Fracspace', img: images.balcony},
+  {id: 'r2', title: 'Elevated Living', dur: '0:07', secs: 7, loc: 'Munnar', stayId: 'ht', stayName: 'Hilltop by Fracspace', img: images.hilltop},
+  {id: 'r3', title: 'A misty escape', dur: '0:09', secs: 9, loc: 'Munnar', stayId: 'ht', stayName: 'Hilltop by Fracspace', img: images.luxury},
 ];
 
 export const offers = [

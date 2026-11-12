@@ -236,6 +236,8 @@ export default function Reels({reels, onBook, onPos}) {
   }, [reel, n, onPos]);
 
   const time = `0:${String(sec).padStart(2, '0')} / ${cur.dur}`;
+  // The property this reel tours; its first letter fills the avatar.
+  const name = (cur.stayName || '').trim();
   const cap = i => enterUp(i, {step: 80, duration: 700, dy: 16});
 
   return (
@@ -262,11 +264,17 @@ export default function Reels({reels, onBook, onPos}) {
             ))}
           </View>
           <View style={styles.head}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>d</Text>
-            </View>
+            {name ? (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{name[0].toUpperCase()}</Text>
+              </View>
+            ) : null}
             <View style={styles.headText}>
-              <Text style={styles.brand}>Dreamscape Stays</Text>
+              {name ? (
+                <Text style={styles.brand} numberOfLines={1}>
+                  {name}
+                </Text>
+              ) : null}
               <Text style={styles.time}>{time}</Text>
             </View>
             <PressScale
