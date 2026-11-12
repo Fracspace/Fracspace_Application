@@ -22,7 +22,7 @@ import {useFirstFrame, useJsFps, useRenderCount} from '../perf';
 import {day, MAX_ROOMS, money, paymentResult, paymentStatus, roomsFor, toReceipt} from '../api/stays';
 import {openPayU} from './payu';
 import {errText} from '../api/client';
-import {clock, useHold} from './useHold';
+import {clock, useHold, useSecondsLeft} from './useHold';
 import {
   CHECK_IN,
   CHECK_OUT,
@@ -181,6 +181,20 @@ const PayNote = memo(function PayNote({note, top, onClose}) {
         <Text style={styles.noteX}>✕</Text>
       </Pressable>
     </Animated.View>
+  );
+});
+
+/** "Held · m:ss": ticks on its own, so the rest of Review doesn't re-render each second. */
+const HeldPill = memo(function HeldPill({expiresAt}) {
+  const left = useSecondsLeft(expiresAt);
+  if (left == null) {
+    return null;
+  }
+  const low = left < 60;
+  return (
+    <View style={[styles.held, low && styles.heldLow]} accessibilityLabel={`Room held for ${clock(left)}`}>
+      <Text style={[styles.heldT, low && styles.heldTLow]}>{`Held · ${clock(left)}`}</Text>
+    </View>
   );
 });
 
@@ -664,11 +678,7 @@ export default function StayReview({navigation, route}) {
               <BackIcon />
             </GlassButton>
             <Text style={styles.h1}>Review booking</Text>
-            {live && hold.left != null ? (
-              <View style={[styles.held, hold.left < 60 && styles.heldLow]} accessibilityLabel={`Room held for ${clock(hold.left)}`}>
-                <Text style={[styles.heldT, hold.left < 60 && styles.heldTLow]}>{`Held · ${clock(hold.left)}`}</Text>
-              </View>
-            ) : null}
+            {live && hold.expiresAt ? <HeldPill expiresAt={hold.expiresAt} /> : null}
           </Stage>
 
           <Stage t={t} i={1} style={[styles.card, styles.stay]}>

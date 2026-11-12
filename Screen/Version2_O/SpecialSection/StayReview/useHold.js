@@ -11,7 +11,6 @@ export function useHold(booking) {
   const [state, setState] = useState(() => (booking ? toReviewState(booking) : null));
   const [busy, setBusy] = useState(false);
   const [expired, setExpired] = useState(false);
-  const [left, setLeft] = useState(null); // whole seconds of the hold left
   const id = booking?.bookingId;
   const done = useRef(false); // paid, confirming, released or expired: nothing to release
   const paying = useRef(false); // checkout open: the server decides if the hold ran out
@@ -77,24 +76,31 @@ export function useHold(booking) {
     }
   }, [id, patch]);
 
-  // Hold countdown, from the server's expiry.
+  // Hold expiry, from the server's time. One timer at the expiry, not a tick
+  // every second: the "Held · m:ss" pill (HeldPill) runs its own clock, so
+  // the countdown never re-renders the whole Review screen.
   const expiresAt = state?.holdExpiresAt;
   useEffect(() => {
     if (!expiresAt || expired) {
       return;
     }
-    const tick = () => {
-      const s = Math.max(0, Math.round((expiresAt - serverNow()) / 1000));
-      setLeft(s);
-      if (s === 0 && !paying.current) {
+    let t;
+    const check = () => {
+      const ms = expiresAt - serverNow();
+      if (ms > 500) {
+        // setTimeout tops out at ~24.8 days; holds are minutes.
+        t = setTimeout(check, Math.min(ms - 500, 2 ** 31 - 1));
+      } else if (paying.current) {
+        // Checkout open: the server decides. Look again once it's closed.
+        t = setTimeout(check, 1000);
+      } else {
         done.current = true;
         forget(id);
         setExpired(true);
       }
     };
-    tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
+    check();
+    return () => clearTimeout(t);
   }, [id, expiresAt, expired]);
 
   /** POST /pay. Resolves to the server's answer ({requiresPayment, booking, payment}). */
@@ -146,8 +152,39 @@ export function useHold(booking) {
     setExpired(true);
   }, [id]);
 
-  return {live: !!booking, id, state, busy, expired, left, patch, pay, settle, expire, release};
+  return {live: !!booking, id, state, busy, expired, expiresAt, patch, pay, settle, expire, release};
 }
 
 /** 590 → "9:50" */
 export const clock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+/** Whole seconds until `expiresAt` (server time), never below 0. */
+export const secondsLeft = expiresAt => Math.max(0, Math.round((expiresAt - serverNow()) / 1000));
+
+/**
+ * The hold's seconds left, ticking once a second until 0. Only the component
+ * that calls it re-renders on each tick.
+ */
+export function useSecondsLeft(expiresAt) {
+  const [left, setLeft] = useState(() => (expiresAt ? secondsLeft(expiresAt) : null));
+  useEffect(() => {
+    if (!expiresAt) {
+      setLeft(null);
+      return;
+    }
+    let t;
+    const tick = () => {
+      const s = secondsLeft(expiresAt);
+      setLeft(s);
+      if (s > 0) {
+        // The shown number (rounded) changes each time the time left crosses
+        // a half second: wake just past the next one, so it never drifts.
+        const r = expiresAt - serverNow();
+        t = setTimeout(tick, ((((r - 500) % 1000) + 1000) % 1000) + 20);
+      }
+    };
+    tick();
+    return () => clearTimeout(t);
+  }, [expiresAt]);
+  return left;
+}
