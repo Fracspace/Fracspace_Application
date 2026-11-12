@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useLayoutEffect, useRef } from 'react';
-import { View, Image, Dimensions, Alert } from 'react-native';
+import { Alert } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Home from '../Home';
 import Property from '../Property';
@@ -27,6 +27,7 @@ import BookingStatus from '../BookingStatus';
 import Payment from '../Payment';
 import VideoDisplay from '../VideoDisplay';
 import PaymentPage from '../PaymentPage';
+import { LaunchBackdrop, LaunchLogo } from '../components/LaunchSplash';
 import NewLogin from '../Version2_O/NewLogin';
 import NewSigin from '../Version2_O/NewSigin';
 import HomePage from '../Version2_O/HomePage';
@@ -83,7 +84,6 @@ import ConcertPaymentPage from '../Version2_O/Concert/ConcertPaymentPage';
 import ConcertBookingSuccess from '../Version2_O/Concert/ConcertBookingSuccess';
 import ConcertBookingFailed from '../Version2_O/Concert/ConcertBookingFailed';
 
-const { width, height } = Dimensions.get('window');
 
 // Android passed {url} to "PdfViewerScreen"; the iOS PdfScreen reads {pdf}.
 const PdfViewerScreenAlias = props => {
@@ -208,14 +208,12 @@ useEffect(() => {
 
 
   if (LoadingS) {
+    // Startup (reading the saved login). LaunchSplash covers this; it matches
+    // it, so if the splash's time cap is reached first nothing changes.
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        {/* <ActivityIndicator size={'large'} color={'#043862'}/> */}
-        <Image
-          source={{uri: "https://fracspace-updates.s3.ap-south-1.amazonaws.com/appImages/SplashImage.png"}}
-          style={{ width: width, height: height }}
-        />
-      </View>
+      <LaunchBackdrop>
+        <LaunchLogo />
+      </LaunchBackdrop>
     );
   } else {
     return (

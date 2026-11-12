@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Linking, Alert, Platform, PermissionsAndroid, View, StatusBar, AppState } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { Provider } from 'react-redux';
@@ -20,6 +20,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import NoInternet from './Screen/components/NoInternet';
 import ErrorBoundary from './Screen/components/ErrorBoundary';
+import LaunchSplash from './Screen/components/LaunchSplash';
 import { applyStatusBarForRoute } from './Screen/utils/statusBar';
 import { trackEvent, trackScreen } from './Screen/utils/analytics';
 import { recoverOpenBookings, watchOpenBookings } from './Screen/Version2_O/SpecialSection/api/recover';
@@ -28,6 +29,9 @@ import './Screen/flags/flagStore'; // app flags: saved copy now, fresh copy in t
 // OTA updates: Stallion on both platforms.
 import * as Stallion from 'react-native-stallion';
 
+// Splash video on launch. false = skip it and open the app straight away
+// (the native launch screen still shows while JS loads).
+const SHOW_SPLASH_VIDEO = false;
 // Longest the splash may stay up (its video is ~4.6 s).
 const SPLASH_MAX_MS = 6000;
 const navigationRef = createNavigationContainerRef();
@@ -138,7 +142,12 @@ const App = () => {
     }
     navigationRef.navigate(redirectData.screen, redirectData.params);
   };
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(SHOW_SPLASH_VIDEO);
+  // Brand-colour launch splash (used when the video is off): stays until the
+  // first screen has mounted (navigation ready), then fades over it.
+  const [navReady, setNavReady] = useState(false);
+  const [launchDone, setLaunchDone] = useState(SHOW_SPLASH_VIDEO);
+  const endLaunch = useCallback(() => setLaunchDone(true), []);
   const [updateConfig, setUpdateConfig] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
@@ -577,7 +586,7 @@ const App = () => {
           />
         </View>
       ) : (
-        <GestureHandlerRootView style={{ flex: 1 }}>
+        <GestureHandlerRootView style={styles.root}>
           <Provider store={store}>
             <AppProvider>
               <ErrorBoundary>
@@ -585,6 +594,7 @@ const App = () => {
                 ref={navigationRef}
                 linking={linking}
                 onReady={() => {
+                  setNavReady(true);
                   routeNameRef.current = navigationRef.getCurrentRoute()?.name;
                   applyStatusBarForRoute(routeNameRef.current);
                   // The first screen (Home or Login) never triggers onStateChange.
@@ -623,6 +633,7 @@ const App = () => {
           </Provider>
         </GestureHandlerRootView>
       )}
+      {launchDone ? null : <LaunchSplash ready={navReady} onDone={endLaunch} />}
       <Toast config={toastConfig} />
       <UpdatePopup
         visible={showUpdateModal}
@@ -637,6 +648,10 @@ const App = () => {
 };
 
 const styles = StyleSheet.create({
+  // White behind every screen: the native window / root view is the launch
+  // navy (so launch has no white flash), and screens without their own
+  // background must still sit on white.
+  root: { flex: 1, backgroundColor: '#FFFFFF' },
   splash: {
     flex: 1,
     // Matches the video's dark background, so no white shows while it loads.
