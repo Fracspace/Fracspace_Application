@@ -223,7 +223,7 @@ export default React.memo(function HubCategories({stays, shop, concerts, onStays
     <View style={styles.sec}>
       <Reveal style={styles.head}>
         <Text style={type.h2}>Explore Categories</Text>
-        <Tag>CURATED</Tag>
+        {/* <Tag>CURATED</Tag> */}
       </Reveal>
       {showStays || showShop ? (
         <Reveal style={styles.grid}>
@@ -263,8 +263,8 @@ export default React.memo(function HubCategories({stays, shop, concerts, onStays
             </View>
             <View style={styles.wideText}>
               <View style={styles.titleRow}>
-                <Text style={[styles.h3, {marginTop: 0}, dim(concerts)]}>Concerts</Text>
-                {concerts === 'live' ? <MTag>LIVE & EXCLUSIVE</MTag> : <Tag>COMING SOON</Tag>}
+                <Text style={[styles.h3, {marginTop: 0}, dim(concerts)]}>Fracspace Exclusive</Text>
+                {concerts !== 'live' && <Tag>COMING SOON</Tag>}
               </View>
               <Text style={[styles.meta, {fontSize: 12}, dim(concerts)]}>Music · Live Events · Shows</Text>
             </View>

@@ -26,7 +26,7 @@ const HEART = 'M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2
 function SectionHead({tag, title, sub, link, onLink, soon}) {
   return (
     <Reveal style={styles.head}>
-      <Tag dot>{tag}</Tag>
+      {/* <Tag dot>{tag}</Tag> */}
       <View style={styles.headRow}>
         <View style={{gap: 4, flexShrink: 1}}>
           <Text style={type.h2}>{title}</Text>
