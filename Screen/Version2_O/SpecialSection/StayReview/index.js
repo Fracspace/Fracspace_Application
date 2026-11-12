@@ -12,7 +12,7 @@ import {useIsFocused} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors, fonts, ls} from '../theme';
 import {E, LoopGate, PressScale, useLoop, useReducedMotion} from '../anim';
-import {BackIcon, GlassButton, Grain} from '../HubBits';
+import {BackIcon, GlassButton} from '../HubBits';
 import {StarIcon} from '../Stays/icons';
 import {Odo, Sweep, useLazy, useShot, useTo} from '../StayDetail/bits';
 import Calendar from './Calendar';
@@ -914,7 +914,6 @@ export default function StayReview({navigation, route}) {
         ) : null}
 
         <PayNote note={note} top={insets.top + 8} onClose={closeNote} />
-        <Grain opacity={0.07} />
       </LoopGate>
     </View>
   );

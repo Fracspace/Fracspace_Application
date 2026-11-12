@@ -14,7 +14,7 @@ import {useIsFocused} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors, fonts, ls} from '../theme';
 import {E, LoopGate, Reveal, RevealScope, ViewportGate, cssAngle, useLinger} from '../anim';
-import {BackIcon, GlassButton, Grain} from '../HubBits';
+import {BackIcon, GlassButton} from '../HubBits';
 import {StarIcon} from '../Stays/icons';
 import {CheckIcon, ShareIcon, useLazy, useTo} from './bits';
 import Hero, {HERO_H} from './Hero';
@@ -523,7 +523,6 @@ export default function StayDetail({navigation, route}) {
           />
         ) : null}
         <Toast ref={toast} top={top + 56} />
-        <Grain opacity={0.07} />
       </LoopGate>
     </View>
   );

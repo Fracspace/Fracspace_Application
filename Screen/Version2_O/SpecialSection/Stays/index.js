@@ -11,7 +11,7 @@ import {useIsFocused} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors, fonts, ls} from '../theme';
 import {E, LoopGate, PressScale, RevealScope, enterUp, kf, useLoop, useToggle} from '../anim';
-import {BackIcon, Grain} from '../HubBits';
+import {BackIcon} from '../HubBits';
 import {navBottom} from '../HubNavBar';
 import {markTap, useFirstFrame, useJsFps, useRenderCount} from '../perf';
 import {SearchIcon, TicketIcon} from './icons';
@@ -192,7 +192,6 @@ export default function Stays({navigation, route}) {
             onPress={() => setSheetStep('where')}
           />
         ) : null}
-        <Grain />
       </LoopGate>
       {sheetStep ? <SearchSheet init={search} step={sheetStep} places={places} onClose={closeSheet} /> : null}
     </View>

@@ -16,7 +16,7 @@ import {useFocusEffect, useIsFocused} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors, fonts} from './theme';
 import {E, LoopGate, RevealScope, ViewportGate, useReducedMotion} from './anim';
-import {BackIcon, GlassButton, Grain, Tag} from './HubBits';
+import {BackIcon, GlassButton, Tag} from './HubBits';
 import HubHero, {SLIDE_MS} from './HubHero';
 import {heroSlides} from './data';
 import {useFlag} from '../../flags/useFlag';
@@ -266,7 +266,6 @@ export default function Hub({navigation}) {
 
               {shop === 'live' ? <CartBar qty={qty} jig={jig} bottom={bottom + 88} onPress={act.shop} /> : null}
 
-              <Grain />
             </View>
           </LoopGate>
         </Animated.View>

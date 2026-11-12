@@ -12,7 +12,6 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors} from '../theme';
 import {LoopGate} from '../anim';
 import {markTap, useFirstFrame, useJsFps, useRenderCount} from '../perf';
-import {Grain} from '../HubBits';
 import List from './List';
 import Product from './Product';
 import Review from './Review';
@@ -288,7 +287,6 @@ export default function IvaShop({navigation}) {
         ) : null}
 
         <Toast msg={toast} top={top + 52} />
-        <Grain opacity={0.07} />
       </LoopGate>
     </View>
   );
