@@ -104,6 +104,52 @@ function ReadPolicy({onPress}) {
   );
 }
 
+/** Small gold line icons for the house-rule rows. */
+function RuleIcon({kind}) {
+  return (
+    <View style={styles.oicon}>
+      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={colors.gold} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        {kind === 'pets' ? (
+          <>
+            <Circle cx="6" cy="10" r="1.8" />
+            <Circle cx="10" cy="6" r="1.8" />
+            <Circle cx="14" cy="6" r="1.8" />
+            <Circle cx="18" cy="10" r="1.8" />
+            <Path d="M12 12c-2.6 0-5 2.8-5 5.2 0 1.6 1.3 2.3 2.6 2.3 1 0 1.6-.5 2.4-.5s1.4.5 2.4.5c1.3 0 2.6-.7 2.6-2.3C17 14.8 14.6 12 12 12z" />
+          </>
+        ) : kind === 'children' ? (
+          <>
+            <Circle cx="12" cy="6" r="2.6" />
+            <Path d="M8 21v-5.5L6 13l2.5-3h7l2.5 3-2 2.5V21M12 15v6" />
+          </>
+        ) : (
+          <Path d="M4 11 12 4l8 7M6 9.5V20h12V9.5M10 20v-5h4v5" />
+        )}
+      </Svg>
+    </View>
+  );
+}
+
+/** House, pets and children policies from the API; hidden when none are set. */
+function OtherPolicies({items}) {
+  if (!items?.length) {
+    return null;
+  }
+  return (
+    <Reveal style={styles.others}>
+      {items.map((o, i) => (
+        <View key={o.key} style={[styles.orow, i > 0 && styles.orowLine]}>
+          <RuleIcon kind={o.key} />
+          <View style={styles.pcopy}>
+            <Text style={styles.tlabel}>{o.label.toUpperCase()}</Text>
+            <Text style={styles.otext}>{o.text}</Text>
+          </View>
+        </View>
+      ))}
+    </Reveal>
+  );
+}
+
 function GoodToKnow({checkIn, checkOut, policy, onOpenPolicy}) {
   useRenderCount('GoodToKnow');
   return (
@@ -137,6 +183,8 @@ function GoodToKnow({checkIn, checkOut, policy, onOpenPolicy}) {
         </View>
         {policy.rules.length ? <ReadPolicy onPress={onOpenPolicy} /> : null}
       </Reveal>
+
+      <OtherPolicies items={policy.others} />
     </View>
   );
 }
@@ -187,6 +235,18 @@ const styles = StyleSheet.create({
   pcopy: {flex: 1, gap: 3, minWidth: 0},
   ptitle: {fontFamily: fonts.extrabold, fontSize: 16, letterSpacing: ls(-0.01, 16), color: '#fff'},
   psub: {fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted},
+  others: {...box, paddingHorizontal: 18},
+  orow: {flexDirection: 'row', alignItems: 'flex-start', gap: 14, paddingVertical: 14},
+  orowLine: {borderTopWidth: 1, borderTopColor: colors.hairline},
+  oicon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(241,221,186,0.1)',
+  },
+  otext: {fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.cream},
   readpol: {
     flexDirection: 'row',
     alignItems: 'center',

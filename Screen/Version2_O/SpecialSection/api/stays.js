@@ -332,6 +332,14 @@ function toPolicy(p) {
     freeHours: free ? free.minHoursBeforeCheckIn : null,
     title: free ? 'Free cancellation' : rules[0]?.label || 'Cancellation policy',
     sub: free ? `Up to ${free.minHoursBeforeCheckIn} hrs before check-in` : cx.text || '',
+    // House, pets and children: only the ones the property has filled in.
+    others: [
+      ['house', 'House rules'],
+      ['pets', 'Pets'],
+      ['children', 'Children'],
+    ]
+      .map(([key, label]) => ({key, label, text: typeof p.policies?.[key] === 'string' ? p.policies[key].trim() : ''}))
+      .filter(o => o.text),
   };
 }
 
@@ -403,6 +411,9 @@ function mockStay(id) {
               {label: 'No refund', minHoursBeforeCheckIn: 0, refundPercent: 0},
             ],
           },
+          house: 'Smoking is permitted in designated areas.',
+          pets: 'Pets allowed upon request.',
+          children: null,
         },
       }),
       taxPct: 5,
