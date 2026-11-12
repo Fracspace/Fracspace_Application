@@ -220,8 +220,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.whiteA(0.1),
   },
-  // Trimmed logo is 887x339.
-  logo: {height: 44, width: 44 * (887 / 339)},
+  // Logo PNG is 345x132: 3x its 115x44 pt size.
+  logo: {height: 44, width: 44 * (345 / 132)},
   mtabWrap: {paddingTop: 10, paddingHorizontal: 20, paddingBottom: 4},
   mtab: {
     flexDirection: 'row',
