@@ -16,7 +16,7 @@ import {useFocusEffect, useIsFocused} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors, fonts} from './theme';
 import {E, LoopGate, RevealScope, ViewportGate, useReducedMotion} from './anim';
-import {BackIcon, GlassButton, Tag} from './HubBits';
+import {BackIcon, GlassButton} from './HubBits';
 import HubHero, {SLIDE_MS} from './HubHero';
 import {heroSlides} from './data';
 import {useFlag} from '../../flags/useFlag';
@@ -260,8 +260,11 @@ export default function Hub({navigation}) {
                 <GlassButton size={40} label="Back to Fracspace home" onPress={act.home}>
                   <BackIcon />
                 </GlassButton>
-                <Text style={styles.mhTitle}>Special Section</Text>
-                <Tag>CURATED</Tag>
+                <Text style={styles.mhTitle} numberOfLines={1}>
+                  Special Section
+                </Text>
+                {/* Same width as the back button, so the title sits in the true centre. */}
+                <View style={styles.mhSide} />
               </Animated.View>
 
               {shop === 'live' ? <CartBar qty={qty} jig={jig} bottom={bottom + 88} onPress={act.shop} /> : null}
@@ -292,5 +295,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.hairline,
     zIndex: 30,
   },
-  mhTitle: {flex: 1, fontFamily: fonts.bold, fontSize: 15, color: colors.cream},
+  mhTitle: {flex: 1, fontFamily: fonts.bold, fontSize: 15, color: colors.cream, textAlign: 'center'},
+  mhSide: {width: 40},
 });
