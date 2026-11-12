@@ -340,15 +340,19 @@ function Review({g}) {
       <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
         <ReviewShade />
       </Svg>
-      <View style={styles.pill}>
-        <Text style={styles.pillText}>{g.place}</Text>
+      <View style={[styles.pill, styles.rvPill]}>
+        <Text style={styles.pillText} numberOfLines={1}>
+          {g.place}
+        </Text>
       </View>
       <View style={styles.star5}>
         <SpinStar />
         <Text style={styles.star5Text}>{g.rate}</Text>
       </View>
       <View style={styles.qpanel}>
-        <Text style={styles.quote}>“{g.quote}”</Text>
+        <Text style={styles.quote} numberOfLines={6}>
+          “{g.quote}”
+        </Text>
         {g.photos ? (
           <View style={styles.photos}>
             <CameraIcon />
@@ -731,6 +735,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     ...glass,
   },
+  rvPill: {maxWidth: REVIEW_W - 120},
   star5Text: {fontFamily: fonts.bold, fontSize: 12, color: '#fff'},
   qpanel: {
     position: 'absolute',
