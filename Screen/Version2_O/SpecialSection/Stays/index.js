@@ -1,6 +1,6 @@
 // Stays listing (Stays.dc.html): "Explore stays" / "My bookings" tabs.
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {StyleSheet, Text, View, useWindowDimensions} from 'react-native';
+import {Image, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
 import Animated, {
   interpolateColor,
   useAnimatedScrollHandler,
@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import {useIsFocused} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {colors, fonts, ls} from '../theme';
+import {colors, fonts} from '../theme';
 import {E, LoopGate, PressScale, RevealScope, enterUp, kf, useLoop, useToggle} from '../anim';
 import {BackIcon} from '../HubBits';
 import {navBottom} from '../HubNavBar';
@@ -18,6 +18,8 @@ import {SearchIcon, TicketIcon} from './icons';
 import Explore, {SearchBar} from './Explore';
 import Bookings from './Bookings';
 import SearchSheet, {initialSearch, placesFrom, tripDates} from './SearchSheet';
+
+const logo = require('../assets/dreamscape-logo.png');
 import {useStaysHome, ymd} from '../api/stays';
 import {ErrorCard} from '../api/ui';
 
@@ -152,9 +154,8 @@ export default function Stays({navigation, route}) {
                     <BackIcon />
                   </PressScale>
                 </Animated.View>
-                <Animated.View entering={rise(1)} style={styles.brand}>
-                  <Text style={styles.brandName}>dreamscape</Text>
-                  <Text style={styles.brandSub}>BANJARA HILLS</Text>
+                <Animated.View entering={rise(1)}>
+                  <Image source={logo} style={styles.logo} resizeMode="contain" accessibilityLabel="Dreamscape Hotels & Resorts" />
                 </Animated.View>
               </View>
 
@@ -219,16 +220,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.whiteA(0.1),
   },
-  brand: {alignItems: 'flex-end'},
-  brandName: {fontFamily: fonts.serif, fontSize: 30, lineHeight: 30, letterSpacing: ls(0.01, 30), color: '#fff'},
-  brandSub: {
-    fontFamily: fonts.bold,
-    fontSize: 7.5,
-    lineHeight: 7.5,
-    letterSpacing: ls(0.28, 7.5),
-    color: colors.soft,
-    marginTop: 2,
-  },
+  // Trimmed logo is 887x339.
+  logo: {height: 44, width: 44 * (887 / 339)},
   mtabWrap: {paddingTop: 10, paddingHorizontal: 20, paddingBottom: 4},
   mtab: {
     flexDirection: 'row',
