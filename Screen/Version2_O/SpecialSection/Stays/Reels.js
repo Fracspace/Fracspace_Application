@@ -26,6 +26,11 @@ const POS = [
   {x: 30, s: 0.93, r: 3, dim: 0.5},
   {x: 54, s: 0.86, r: 6, dim: 0.7},
 ];
+// The stack's full width: the back card's offset plus its scaled width
+// (cards scale from their left edge). The deck is centred at this width so
+// the gaps either side match on every screen; left-anchored, wider phones
+// (most iPhones) put all the spare room on the right.
+const DECK_W = Math.ceil(Math.max(...POS.map(p => p.x + CARD_W * p.s)));
 const ZOOM_MS = 9000;
 // A video that isn't ready by then plays as its thumbnail (with the zoom).
 const VIDEO_WAIT_MS = 5000;
@@ -306,7 +311,7 @@ export default function Reels({reels, onBook, onPos}) {
 
 const styles = StyleSheet.create({
   wrap: {paddingHorizontal: 20},
-  deck: {height: 440},
+  deck: {height: 440, width: DECK_W, alignSelf: 'center'},
   fill: {width: '100%', height: '100%'},
   hidden: {opacity: 0},
   rc: {
