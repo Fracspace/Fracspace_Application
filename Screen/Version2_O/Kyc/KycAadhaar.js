@@ -5,7 +5,7 @@ import {ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View}
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {WebView} from 'react-native-webview';
 import Icon from 'react-native-vector-icons/Feather';
-import {DIGILOCKER_RETURN, USE_MOCK, setMockDigilockerOutcome, startDigilocker, syncDigilocker} from './api';
+import {DIGILOCKER_RETURN, KYC_MOCK, setMockDigilockerOutcome, startDigilocker, syncDigilocker} from './api';
 import {C, F} from './theme';
 import {checkError, isStepLocked, nextRoute, refreshKyc, setKyc, stepNumber, useKyc} from './store';
 import {Footer, Header, Note, PrimaryButton, StepDone, StatusBg} from './ui';
@@ -33,6 +33,7 @@ export default function KycAadhaar({navigation}) {
   const [phase, setPhase] = useState('intro'); // intro | sheet | checking | done | pending
   const [session, setSession] = useState(null);
   const [starting, setStarting] = useState(false);
+  const inFlight = useRef(false);
   const [note, setNote] = useState(null);
   const [pageUrl, setPageUrl] = useState('');
   const [pageLoading, setPageLoading] = useState(true);
@@ -53,6 +54,10 @@ export default function KycAadhaar({navigation}) {
   const earlier = step?.status === 'failed' || step?.status === 'expired' || step?.status === 'error' ? step.message : null;
 
   const start = async () => {
+    if (inFlight.current || locked) {
+      return;
+    }
+    inFlight.current = true;
     setStarting(true);
     setNote(null);
     try {
@@ -72,6 +77,7 @@ export default function KycAadhaar({navigation}) {
         navigation.goBack();
       }
     } finally {
+      inFlight.current = false;
       setStarting(false);
     }
   };
@@ -112,7 +118,7 @@ export default function KycAadhaar({navigation}) {
       return;
     }
     returned.current = true;
-    if (USE_MOCK) {
+    if (KYC_MOCK.on) {
       const m = /[?&]mock=(\w+)/.exec(url);
       setMockDigilockerOutcome(m ? m[1] : null);
     }
@@ -239,7 +245,7 @@ export default function KycAadhaar({navigation}) {
             <View style={st.urlPill}>
               <Icon name="lock" size={12} color={C.success} />
               <Text style={st.urlText} numberOfLines={1}>
-                {USE_MOCK ? 'digilocker.gov.in (mock)' : hostOf(pageUrl)}
+                {KYC_MOCK.on ? 'digilocker.gov.in (mock)' : hostOf(pageUrl)}
               </Text>
             </View>
             <View style={st.sheetSpin}>{pageLoading ? <ActivityIndicator size="small" color={C.navy} /> : null}</View>
@@ -254,7 +260,9 @@ export default function KycAadhaar({navigation}) {
                   onReturn(req.url);
                   return false; // don't load our web page inside the app
                 }
-                return true;
+                // intent://, market:// etc. (DigiLocker offering its app) can't
+                // load in a WebView; stay on the web flow.
+                return /^(https?|about|data|blob):/i.test(req.url);
               }}
               onNavigationStateChange={nav => {
                 canGoBack.current = nav.canGoBack;

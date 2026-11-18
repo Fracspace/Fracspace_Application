@@ -1,4 +1,4 @@
-// Walks the e-KYC screens through the mock backend (Kyc/api.js USE_MOCK):
+// Walks the e-KYC screens through the mock backend (KYC_MOCK in Kyc/api.js):
 // overview → PAN → bank → Aadhaar (DigiLocker sheet) → result.
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -30,6 +30,9 @@ import KycPan from '../Screen/Version2_O/Kyc/KycPan';
 import KycBank from '../Screen/Version2_O/Kyc/KycBank';
 import KycAadhaar from '../Screen/Version2_O/Kyc/KycAadhaar';
 import KycResult from '../Screen/Version2_O/Kyc/KycResult';
+import {KYC_MOCK} from '../Screen/Version2_O/Kyc/api';
+
+KYC_MOCK.on = true;
 
 jest.setTimeout(30000);
 const sleep = ms => act(() => new Promise(r => setTimeout(r, ms)));

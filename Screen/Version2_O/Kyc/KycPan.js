@@ -1,6 +1,6 @@
 // Step: PAN. One field, one button. The name comes back from Income Tax.
 // The PAN lives only in this screen's state; it's never stored or logged.
-import React, {useState} from 'react';
+import React, {useRef, useState} from 'react';
 import {KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View} from 'react-native';
 import {verifyPan} from './api';
 import {C} from './theme';
@@ -29,6 +29,7 @@ export default function KycPan({navigation}) {
   const {kyc} = useKyc({refreshOnFocus: false});
   const [pan, setPan] = useState('');
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false); // a double tap must not send two paid checks
   const [fieldError, setFieldError] = useState(null);
   const [note, setNote] = useState(null);
   const [result, setResult] = useState(null); // {status, kyc}
@@ -45,9 +46,10 @@ export default function KycPan({navigation}) {
   };
 
   const submit = async () => {
-    if (!valid || busy) {
+    if (!valid || inFlight.current || locked) {
       return;
     }
+    inFlight.current = true;
     setBusy(true);
     setFieldError(null);
     setNote(null);
@@ -71,6 +73,7 @@ export default function KycPan({navigation}) {
         navigation.goBack();
       }
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };

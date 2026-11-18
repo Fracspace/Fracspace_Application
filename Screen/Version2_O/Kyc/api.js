@@ -7,27 +7,37 @@ import {request, ApiError} from '../SpecialSection/api/client';
 
 /**
  * true = the screens run against the in-memory mock below and never call the
- * server. The KYC backend isn't deployed yet; flip this off once it is.
+ * server. Only for UI work: real checks run on apitest's /api/v1/kyc.
  */
-export const USE_MOCK = true;
+export const KYC_MOCK = {on: false};
+const mocked = () => KYC_MOCK.on;
 
 export const DIGILOCKER_RETURN = 'https://portal.fracspace.com/kyc/return';
 
-export const getKyc = () => (USE_MOCK ? mock.me() : request('GET', '/kyc/me'));
+export const getKyc = () => (mocked() ? mock.me() : request('GET', '/kyc/me').then(logKyc));
+
+// Dev builds: one line per /me with statuses only (never names or numbers).
+function logKyc(kyc) {
+  if (__DEV__) {
+    const steps = (kyc?.steps || []).map(x => `${x.type}=${x.status}`).join(' ');
+    console.log('[kyc] me', kyc?.status, `next=${kyc?.nextStep}`, `run=${kyc?.canRunChecks}`, `on=${kyc?.available}`, steps);
+  }
+  return kyc;
+}
 
 export const verifyPan = pan =>
-  USE_MOCK ? mock.pan(pan) : request('POST', '/kyc/pan', {body: {pan}, timeout: 30000});
+  mocked() ? mock.pan(pan) : request('POST', '/kyc/pan', {body: {pan}, timeout: 30000});
 
 export const startDigilocker = () =>
-  USE_MOCK ? mock.startDigilocker() : request('POST', '/kyc/aadhaar/digilocker', {body: {}});
+  mocked() ? mock.startDigilocker() : request('POST', '/kyc/aadhaar/digilocker', {body: {}});
 
 export const syncDigilocker = verificationId =>
-  USE_MOCK
+  mocked()
     ? mock.syncDigilocker(verificationId)
     : request('POST', '/kyc/aadhaar/digilocker/sync', {body: {verificationId}, timeout: 30000});
 
 export const verifyBank = (accountNumber, ifsc) =>
-  USE_MOCK
+  mocked()
     ? mock.bank(accountNumber, ifsc)
     : request('POST', '/kyc/bank', {body: {accountNumber, ifsc}, timeout: 30000});
 

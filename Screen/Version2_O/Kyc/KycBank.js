@@ -35,6 +35,7 @@ export default function KycBank({navigation}) {
   const [accFocused, setAccFocused] = useState(false);
   const [acc2Touched, setAcc2Touched] = useState(false);
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false); // a double tap must not send two paid checks
   const [note, setNote] = useState(null);
   const [result, setResult] = useState(null);
   const [locked, setLocked] = useState(isStepLocked('bank'));
@@ -53,9 +54,10 @@ export default function KycBank({navigation}) {
   };
 
   const submit = async () => {
-    if (!ready || busy) {
+    if (!ready || inFlight.current) {
       return;
     }
+    inFlight.current = true;
     setBusy(true);
     reset();
     try {
@@ -80,6 +82,7 @@ export default function KycBank({navigation}) {
         navigation.goBack();
       }
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
