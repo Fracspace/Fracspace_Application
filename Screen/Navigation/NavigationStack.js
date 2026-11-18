@@ -75,6 +75,10 @@ import MembershipHome from '../Version2_O/escapeMembership/MembershipHome';
 import PackageDescription from '../Version2_O/PackageDescription';
 import AddressSearchScreen from '../Version2_O/AddressSearchScreen';
 import CompleteProfileScreen from '../Version2_O/CompleteProfileScreen';
+import KycPan from '../Version2_O/Kyc/KycPan';
+import KycAadhaar from '../Version2_O/Kyc/KycAadhaar';
+import KycBank from '../Version2_O/Kyc/KycBank';
+import KycResult from '../Version2_O/Kyc/KycResult';
 import ConcertDetails from '../Version2_O/Concert/ConcertDetails';
 import ConcertBookings from '../Version2_O/Concert/ConcertBookings';
 import ConcertBookingDetail from '../Version2_O/Concert/ConcertBookingDetail';
@@ -408,6 +412,10 @@ useEffect(() => {
           component={CompleteProfileScreen}
           options={{ headerShown: false }}
         />
+        <Stack.Screen name="KycPan" component={KycPan} options={{ headerShown: false }} />
+        <Stack.Screen name="KycAadhaar" component={KycAadhaar} options={{ headerShown: false }} />
+        <Stack.Screen name="KycBank" component={KycBank} options={{ headerShown: false }} />
+        <Stack.Screen name="KycResult" component={KycResult} options={{ headerShown: false, gestureEnabled: false }} />
      
 
         <Stack.Screen
