@@ -34,7 +34,12 @@ import {BackIcon, GlassButton, Grain} from '../SpecialSection/HubBits';
 import {videoSource} from '../../utils/videoSource';
 import {EDGE_TO_EDGE} from '../../utils/statusBar';
 
-const INTRO_VIDEO = 'https://fracspace-updates.s3.ap-south-1.amazonaws.com/videos/FRACSPACE_Introo.mp4';
+// CloudFront (edge cache near users) in front of the same S3 object.
+const INTRO_VIDEO = 'https://duixj37yn5405.cloudfront.net/videos/FRACSPACE_Introo.mp4';
+// The video's first frame (540×960), bundled: shows at once, before and
+// instead of the video, so a slow or missing network never leaves the screen dark.
+const INTRO_POSTER = require('../assets/loginIntroPoster.jpg');
+const INTRO_SOURCE = videoSource(INTRO_VIDEO, {cacheSizeMB: 64});
 const logo = require('../assets/Fslogoapp.png');
 const AUDIO_OFF = {type: 'disabled'};
 const AUDIO_ON = {type: 'system'};
@@ -78,6 +83,19 @@ export function AuthScreen({children, overlay}) {
   const focused = useIsFocused();
   const [videoFailed, setVideoFailed] = useState(false);
   const [muted, setMuted] = useState(true);
+  // The poster sits over the video and fades out once the video has drawn a
+  // frame. (Fading the video itself doesn't work: Android draws it on a
+  // SurfaceView, which ignores its parent's opacity.)
+  const reduced = useReducedMotion();
+  const poster = useSharedValue(1);
+  const posterStyle = useAnimatedStyle(() => ({opacity: poster.value}));
+  const onVideoReady = useCallback(() => {
+    poster.value = reduced ? 0 : withTiming(0, {duration: 600, easing: E.out});
+  }, [poster, reduced]);
+  const onVideoError = useCallback(() => {
+    poster.value = 1;
+    setVideoFailed(true);
+  }, [poster]);
   // With the keyboard up the panel rises over the bright part of the video:
   // dim the video and put a dark scrim behind the panel so the text reads.
   const kb = useKeyboardProgress();
@@ -85,11 +103,12 @@ export function AuthScreen({children, overlay}) {
 
   return (
     <View style={styles.app}>
-      {/* `.bgv`: looping cover video, muted until the user unmutes it;
-          #061040 shows while it loads. Muted, it leaves other audio alone. */}
+      {/* `.bgv`: looping cover video, muted until the user unmutes it; its
+          first frame (the poster, below) covers it until it can play.
+          Muted, it leaves other audio alone. */}
       {!videoFailed && (
         <Video
-          source={videoSource(INTRO_VIDEO)}
+          source={INTRO_SOURCE}
           style={StyleSheet.absoluteFill}
           resizeMode="cover"
           muted={muted}
@@ -104,9 +123,17 @@ export function AuthScreen({children, overlay}) {
           shutterColor="transparent"
           // Nothing reads progress: tick rarely instead of every 250 ms.
           progressUpdateInterval={5000}
-          onError={() => setVideoFailed(true)}
+          onReadyForDisplay={onVideoReady}
+          onError={onVideoError}
         />
       )}
+      <Animated.Image
+        pointerEvents="none"
+        source={INTRO_POSTER}
+        style={[StyleSheet.absoluteFill, styles.poster, posterStyle]}
+        resizeMode="cover"
+        fadeDuration={0}
+      />
       {/* `.vshade`: navy at the top, fading to the ground behind the panel. */}
       <LinearGradient
         pointerEvents="none"
@@ -378,6 +405,8 @@ export function OtpBoxes({digits, inputRefs, maxLength, onChange, onKeyPress}) {
 const styles = StyleSheet.create({
   app: {flex: 1, backgroundColor: '#061040'},
   flex: {flex: 1},
+  // absoluteFill's width/height are undefined; an Image needs them to cover.
+  poster: {width: '100%', height: '100%'},
   hidden: {position: 'absolute', left: 0, right: 0, bottom: 0},
   flexShrink: {flexShrink: 1},
   logo: {position: 'absolute', left: 24, zIndex: 5},
