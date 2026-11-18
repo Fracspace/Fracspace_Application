@@ -16,15 +16,24 @@ const ANDROID_BUFFER_CONFIG = {
 
 const cache = new Map();
 
-export function videoSource(uri) {
+// `cacheSizeMB` (Android only) keeps the downloaded video in ExoPlayer's disk
+// cache, so later plays and loops don't fetch it again. iOS caching needs a
+// native build flag, so it's left off there.
+export function videoSource(uri, { cacheSizeMB } = {}) {
   if (!uri) return undefined;
-  let source = cache.get(uri);
+  const key = cacheSizeMB ? `${uri}|${cacheSizeMB}` : uri;
+  let source = cache.get(key);
   if (!source) {
     source =
       Platform.OS === 'android'
-        ? { uri, bufferConfig: ANDROID_BUFFER_CONFIG }
+        ? {
+            uri,
+            bufferConfig: cacheSizeMB
+              ? { ...ANDROID_BUFFER_CONFIG, cacheSizeMB }
+              : ANDROID_BUFFER_CONFIG,
+          }
         : { uri };
-    cache.set(uri, source);
+    cache.set(key, source);
   }
   return source;
 }
