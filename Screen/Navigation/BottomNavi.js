@@ -1,7 +1,7 @@
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import React, {forwardRef, useState, useEffect, useContext} from 'react';
 import {View,Text,TouchableOpacity,Image,StyleSheet,Dimensions,} from 'react-native';
-import Svg, {Path} from 'react-native-svg';
+import Svg, {G, Path} from 'react-native-svg';
 import { AppContext } from '../Context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DarkNavBar, NavCore, navBottom } from '../Version2_O/SpecialSection/HubNavBar';
@@ -11,6 +11,14 @@ import { markTap, sinceTap } from '../Version2_O/SpecialSection/perf';
 const {width} = Dimensions.get('window');
 const TAB_WIDTH = width / 5;
 const CENTRE = 2;
+// Room above the bar for its shadow (the SVG starts this far above the bar).
+const SHADOW = 14;
+// Soft shadow along the bar's top edge and the active tab's curve, drawn as
+// stacked strokes under the white fill: elevation draws nothing here because
+// the bar's shape is an SVG, not a View with a background.
+// Eight faint layers, each 3pt wider, overlap into a smooth fade: darkest
+// at the edge (~12%), gone by 12pt out.
+const SHADOW_STROKES = Array.from({length: 8}, (_, i) => ({width: 23 - i * 3, opacity: 0.015}));
 
 
 
@@ -109,7 +117,8 @@ const BottomNavi = forwardRef(({state, navigation}, ref) => {
         return <DarkNavBar tabs={tabs} onPress={goTo} bottom={navBottom(insets)} />;
     }
 
-    const getArcPath = index => {
+    // The top edge, with the dip under the active tab.
+    const getEdgePath = index => {
         const center = index * TAB_WIDTH + TAB_WIDTH / 2;
         const left = center - 45;
         const c1 = center - 30;
@@ -121,18 +130,22 @@ const BottomNavi = forwardRef(({state, navigation}, ref) => {
         H${left} 
         C${c1} 0, ${c1} 40, ${center} 40 
         C${c2} 40, ${c2} 0, ${right} 0 
-        H${width} 
-        V90 
-        H0 
-        Z
+        H${width}
         `;
     };
+    const getArcPath = index => `${getEdgePath(index)} V90 H0 Z`;
+    const arcIndex = selected === CENTRE ? -10 : selected;
 
   return (
     <View style={{height: 70, width: '100%', position: 'absolute', bottom: insets.bottom, shadowColor: '#000',elevation:10}}>
         {/* Arc background */}
-        <Svg width={width} height={90} style={StyleSheet.absoluteFill}>
-            <Path d={selected === CENTRE ? getArcPath(-10) : getArcPath(selected)} fill="#FFFFFF" />
+        <Svg width={width} height={90 + SHADOW} style={styles.arc} pointerEvents="none">
+            <G transform={`translate(0 ${SHADOW})`}>
+                {SHADOW_STROKES.map(sh => (
+                    <Path key={sh.width} d={getEdgePath(arcIndex)} fill="none" stroke="#000" strokeOpacity={sh.opacity} strokeWidth={sh.width} />
+                ))}
+                <Path d={getArcPath(arcIndex)} fill="#FFFFFF" />
+            </G>
         </Svg>
 
         {/* Floating Circle */}
@@ -253,6 +266,7 @@ const BottomNavi = forwardRef(({state, navigation}, ref) => {
 });
 
 const styles = StyleSheet.create({
+  arc: {position: 'absolute', top: -SHADOW, left: 0},
   circle: {
     position: 'absolute',
     top: -15,
